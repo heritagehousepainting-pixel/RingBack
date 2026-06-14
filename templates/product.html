@@ -1,0 +1,86 @@
+{% extends "marketing_base.html" %}
+{% set check %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>{% endset %}
+{% set ic_chat %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>{% endset %}
+{% set ic_cal %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg>{% endset %}
+{% set ic_alert %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>{% endset %}
+{% set ic_inbox %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>{% endset %}
+
+{% block title %}Product{% endblock %}
+{% block content %}
+<header class="mk-head"><div class="mk-wrap">
+  <span class="mk-eyebrow">Product</span>
+  <h1 class="mk-h1">Everything you need to win the next job<span class="dot">.</span></h1>
+  <p class="mk-lead">RingBack answers the calls you miss, qualifies the job, and books the estimate — automatically. Here’s what’s under the hood.</p>
+  <div class="mk-head-actions">
+    <a class="ob-btn ob-btn-accent ob-btn-lg" href="/signup">Sign up for free</a>
+    <a class="ob-btn ob-btn-light ob-btn-lg" href="/simulator">See the live demo</a>
+  </div>
+</div></header>
+
+<section class="mk-section"><div class="mk-wrap">
+  <div class="mk-row">
+    <div class="mk-copy">
+      <span class="mk-kicker">Instant text-back</span>
+      <h3>Reply in seconds, in your voice.</h3>
+      <p>The moment a call goes unanswered, RingBack texts the caller back — before they dial the next contractor on the list.</p>
+      <ul>
+        <li><span class="mk-check">{{ check }}</span> Fires within seconds of a missed call</li>
+        <li><span class="mk-check">{{ check }}</span> Sounds like a real person, trained on your business</li>
+        <li><span class="mk-check">{{ check }}</span> Works 24/7 — nights and weekends included</li>
+      </ul>
+    </div>
+    <div class="mk-visual">{{ ic_chat }}</div>
+  </div>
+
+  <div class="mk-row flip">
+    <div class="mk-copy">
+      <span class="mk-kicker">AI booking</span>
+      <h3>Qualifies the job and books the estimate.</h3>
+      <p>RingBack asks the right questions, confirms the caller is in your service area, then offers your open windows and locks one in.</p>
+      <ul>
+        <li><span class="mk-check">{{ check }}</span> Captures job type and location</li>
+        <li><span class="mk-check">{{ check }}</span> Offers only the slots you’ve made available</li>
+        <li><span class="mk-check">{{ check }}</span> Books straight onto your schedule</li>
+      </ul>
+    </div>
+    <div class="mk-visual">{{ ic_cal }}</div>
+  </div>
+
+  <div class="mk-row">
+    <div class="mk-copy">
+      <span class="mk-kicker">Urgent alerts</span>
+      <h3>Never miss the job that can’t wait.</h3>
+      <p>Flooding, no heat, no power — RingBack spots an emergency in the conversation and pings you the second it can’t wait.</p>
+      <ul>
+        <li><span class="mk-check">{{ check }}</span> Detects emergency language automatically</li>
+        <li><span class="mk-check">{{ check }}</span> Notifies you immediately</li>
+        <li><span class="mk-check">{{ check }}</span> Flags the lead so it’s never buried</li>
+      </ul>
+    </div>
+    <div class="mk-visual">{{ ic_alert }}</div>
+  </div>
+
+  <div class="mk-row flip">
+    <div class="mk-copy">
+      <span class="mk-kicker">One inbox</span>
+      <h3>Every lead and conversation, organized.</h3>
+      <p>See each caller, the full text thread, and every booked estimate in one clean cockpit. Nothing slips through the cracks.</p>
+      <ul>
+        <li><span class="mk-check">{{ check }}</span> Live lead list with status at a glance</li>
+        <li><span class="mk-check">{{ check }}</span> Full conversation history per lead</li>
+        <li><span class="mk-check">{{ check }}</span> Booked estimates ready for your calendar</li>
+      </ul>
+    </div>
+    <div class="mk-visual">{{ ic_inbox }}</div>
+  </div>
+</div></section>
+
+<section class="mk-section"><div class="mk-wrap">
+  <div class="mk-section-head center"><span class="mk-kicker">How it works</span><h2 class="mk-h2">Live in a day. Then it just runs.</h2></div>
+  <div class="mk-steps">
+    <div class="mk-step"><div class="n">1</div><h3>We train it on your business</h3><p>Your services, service area, hours, and the way you talk — in minutes.</p></div>
+    <div class="mk-step"><div class="n">2</div><h3>Forward your missed calls</h3><p>Point unanswered calls at RingBack. Keep your existing number.</p></div>
+    <div class="mk-step"><div class="n">3</div><h3>Show up to booked jobs</h3><p>RingBack handles the rest, around the clock. You just do the work.</p></div>
+  </div>
+</div></section>
+{% endblock %}

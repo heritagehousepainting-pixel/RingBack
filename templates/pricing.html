@@ -1,0 +1,68 @@
+{% extends "marketing_base.html" %}
+{% from "components/ui/badge.html" import pill %}
+{% set check %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--accent)"><path d="M20 6L9 17l-5-5"/></svg>{% endset %}
+
+{% block title %}Pricing{% endblock %}
+{% block content %}
+<header class="mk-head"><div class="mk-wrap">
+  <span class="mk-eyebrow">Pricing</span>
+  <h1 class="mk-h1">Simple, flat pricing<span class="dot">.</span></h1>
+  <p class="mk-lead">No per-call or per-minute fees. Ever. Pick a plan, get set up in a day, and only pay for the seats you need.</p>
+</div></header>
+
+<section class="mk-section"><div class="mk-wrap">
+  <div class="mk-price-grid">
+    <div class="mk-price">
+      <div class="tier">Starter</div>
+      <div class="price"><span class="amount">$99</span><span class="per">/ month</span></div>
+      <p class="blurb">For solo operators who can’t afford to miss a call.</p>
+      <ul>
+        <li>{{ check }} Instant missed-call text-back</li>
+        <li>{{ check }} AI booking on your schedule</li>
+        <li>{{ check }} Up to 200 conversations / mo</li>
+        <li>{{ check }} 1 phone number</li>
+      </ul>
+      <a class="ob-btn ob-btn-light" href="/signup">Start free</a>
+    </div>
+
+    <div class="mk-price featured">
+      <span class="featured-flag">{{ pill('Most popular', 'new') }}</span>
+      <div class="tier">Pro</div>
+      <div class="price"><span class="amount">$199</span><span class="per">/ month</span></div>
+      <p class="blurb">For busy crews keeping the calendar full.</p>
+      <ul>
+        <li>{{ check }} Everything in Starter</li>
+        <li>{{ check }} Unlimited conversations</li>
+        <li>{{ check }} Urgent-job alerts</li>
+        <li>{{ check }} Calendar integration</li>
+        <li>{{ check }} Priority support</li>
+      </ul>
+      <a class="ob-btn ob-btn-accent" href="/signup">Start free</a>
+    </div>
+
+    <div class="mk-price">
+      <div class="tier">Crew</div>
+      <div class="price"><span class="amount">$399</span><span class="per">/ month</span></div>
+      <p class="blurb">For multi-location shops and growing teams.</p>
+      <ul>
+        <li>{{ check }} Everything in Pro</li>
+        <li>{{ check }} Up to 5 phone numbers</li>
+        <li>{{ check }} Multiple business profiles</li>
+        <li>{{ check }} Team roles & logins</li>
+        <li>{{ check }} Dedicated onboarding</li>
+      </ul>
+      <a class="ob-btn ob-btn-light" href="/contact">Talk to sales</a>
+    </div>
+  </div>
+</div></section>
+
+<section class="mk-section"><div class="mk-wrap">
+  <div class="mk-section-head center"><span class="mk-kicker">FAQ</span><h2 class="mk-h2">Questions, answered.</h2></div>
+  <div class="mk-faq">
+    <details><summary>Are there per-call or per-minute fees?</summary><p>No. Your plan is one flat monthly rate — answer as many calls as your plan allows with no metered charges or surprise overages.</p></details>
+    <details><summary>Can I keep my existing phone number?</summary><p>Yes. You forward your unanswered calls to RingBack and keep the number your customers already know.</p></details>
+    <details><summary>How long does setup take?</summary><p>Most contractors are live within a day. We train RingBack on your business and help you forward missed calls.</p></details>
+    <details><summary>What if I want to cancel?</summary><p>Cancel anytime — there are no contracts and no cancellation fees.</p></details>
+  </div>
+</div></section>
+{% endblock %}

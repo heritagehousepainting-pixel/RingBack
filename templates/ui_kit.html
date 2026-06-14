@@ -1,0 +1,280 @@
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/input.html" import field %}
+{% from "components/ui/badge.html" import pill %}
+{% from "components/ui/card.html" import card %}
+{% from "components/ui/data_table.html" import data_table %}
+{% from "components/ui/stat_tile.html" import stat_row, stat_tile %}
+{% from "components/ui/chat_bubble.html" import chat_thread, chat_meta, chat_bubble %}
+{% from "components/ui/empty_state.html" import empty_state %}
+
+{# ---- reusable inline icons ---- #}
+{% set ic_arrow %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>{% endset %}
+{% set ic_plus %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>{% endset %}
+{% set ic_chat %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>{% endset %}
+{% set star %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.95 5.98 6.6.96-4.78 4.66 1.13 6.57L12 17.56l-5.9 3.1 1.13-6.57L2.45 9.44l6.6-.96z"/></svg>{% endset %}
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RingBack · UI System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/ui.css">
+  <link rel="stylesheet" href="/static/ui-gallery.css">
+</head>
+<body class="ui-body">
+
+<header class="ui-topbar">
+  <div class="ui-topbar-inner">
+    <span class="ui-logo">
+      <span class="ui-logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v6"/></svg></span>
+      RingBack
+    </span>
+    <span class="ui-eyebrow">Design System · v1</span>
+  </div>
+</header>
+
+<main class="ui-shell">
+
+  <section class="ui-hero">
+    <h1>Component system</h1>
+    <p>The shared token + component layer every product screen is built from. Approve
+       this and the Dashboard, Settings, and Simulator get rebuilt on top of it.
+       Hover / active / focus states are shown <em>forced</em> here so you can see the
+       whole matrix at once — they also fire on real interaction.</p>
+    <div class="ui-legend">
+      <span class="ui-tag">Accent · <b>Safety Orange #EA580C</b></span>
+      <span class="ui-tag">Type · <b>Archivo</b></span>
+      <span class="ui-tag">Radius · <b>8px</b></span>
+      <span class="ui-tag">Surfaces · <b>bg ≠ card ≠ input</b></span>
+    </div>
+  </section>
+
+  <!-- ============================ TOKENS ============================ -->
+  <section class="ui-section">
+    <h2>Tokens · Color</h2>
+    <p class="ui-note">Neutrals do ~90% of the work; the accent is a scalpel. Stars are amber, never the accent.</p>
+    <div class="sw-grid">
+      {% for name, val in [
+        ('--ink','#0B0E14'), ('--ink-soft','#4A5160'), ('--ink-faint','#8A91A0'),
+        ('--bg','#FAFAF8'), ('--surface','#FFFFFF'), ('--border','#E6E7EB'),
+        ('--accent','#EA580C'), ('--accent-strong','#C2410C'), ('--accent-bg','#FCEBDD'),
+        ('--success','#15803D'), ('--warning','#B45309'), ('--danger','#B91C1C'), ('--star','#F59E0B') ] %}
+      <div class="sw">
+        <div class="sw-chip" style="background:var({{ name }})"></div>
+        <div class="sw-meta"><span class="sw-name">{{ name }}</span><span class="sw-val">{{ val }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="ui-section">
+    <h2>Tokens · Type scale</h2>
+    <p class="ui-note">Archivo throughout. Black weights are reserved for marketing; product UI uses 400–600.</p>
+    <div class="type-list">
+      {% for tk, rem in [('--text-xs','.75'),('--text-sm','.875'),('--text-base','1'),('--text-md','1.125'),('--text-lg','1.25'),('--text-xl','1.5'),('--text-2xl','2'),('--text-3xl','2.5'),('--text-4xl','3.5'),('--text-5xl','4.5')] %}
+      <div class="type-row">
+        <span class="t-meta">{{ tk[6:] }} · {{ rem }}rem</span>
+        <span class="t-sample" style="font-size:var({{ tk }})">Booked the estimate</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="ui-section">
+    <div class="ui-grid ui-grid-2">
+      <div>
+        <h2>Tokens · Spacing</h2>
+        <p class="ui-note">4px base. Product leans on 8–24.</p>
+        <div class="sp-list">
+          {% for tk, px in [('--space-1','4'),('--space-2','8'),('--space-3','12'),('--space-4','16'),('--space-6','24'),('--space-8','32'),('--space-12','48'),('--space-16','64'),('--space-24','96')] %}
+          <div class="sp-row"><span class="sp-bar" style="width:var({{ tk }})"></span><span class="sp-meta">{{ tk[8:] }} · {{ px }}px</span></div>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <h2>Tokens · Radius &amp; elevation</h2>
+        <p class="ui-note">Cards = surface + hairline + a whisper of shadow. That's the line between card and wireframe box.</p>
+        <div class="ui-row" style="margin-bottom:var(--space-6)">
+          <div class="ui-stack"><span class="ui-stack-label">sm · 6</span><span style="width:56px;height:40px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm)"></span></div>
+          <div class="ui-stack"><span class="ui-stack-label">base · 8</span><span style="width:56px;height:40px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius)"></span></div>
+          <div class="ui-stack"><span class="ui-stack-label">bubble · 14</span><span style="width:56px;height:40px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-bubble)"></span></div>
+          <div class="ui-stack"><span class="ui-stack-label">pill · full</span><span style="width:56px;height:40px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-pill)"></span></div>
+        </div>
+        <div class="elev-grid">
+          <div class="elev-card">border only</div>
+          <div class="elev-card shadow">shadow-card</div>
+          <div class="elev-card shadow-pop">shadow-pop</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ BUTTON ============================ -->
+  <section class="ui-section">
+    <h2>Button</h2>
+    <p class="ui-note">Variants <code>primary</code> / <code>secondary</code> / <code>ghost</code>, each with hover · active · focus-visible · disabled. The focus ring is the accent at low opacity.</p>
+    <div class="ui-blocks">
+      <div class="ui-stack">
+        <span class="ui-stack-label">Primary</span>
+        <div class="ui-row">
+          {{ button('Default') }}{{ button('Hover', extra='is-hover') }}{{ button('Active', extra='is-active') }}{{ button('Focus', extra='is-focus') }}{{ button('Disabled', disabled=true) }}
+        </div>
+      </div>
+      <div class="ui-stack">
+        <span class="ui-stack-label">Secondary</span>
+        <div class="ui-row">
+          {{ button('Default', variant='secondary') }}{{ button('Hover', variant='secondary', extra='is-hover') }}{{ button('Active', variant='secondary', extra='is-active') }}{{ button('Focus', variant='secondary', extra='is-focus') }}{{ button('Disabled', variant='secondary', disabled=true) }}
+        </div>
+      </div>
+      <div class="ui-stack">
+        <span class="ui-stack-label">Ghost</span>
+        <div class="ui-row">
+          {{ button('Default', variant='ghost') }}{{ button('Hover', variant='ghost', extra='is-hover') }}{{ button('Active', variant='ghost', extra='is-active') }}{{ button('Focus', variant='ghost', extra='is-focus') }}{{ button('Disabled', variant='ghost', disabled=true) }}
+        </div>
+      </div>
+      <div class="ui-stack">
+        <span class="ui-stack-label">Sizes &amp; icons</span>
+        <div class="ui-row">
+          {{ button('See the live demo', icon=ic_arrow) }}{{ button('New lead', variant='secondary', icon=ic_plus) }}{{ button('Small', size='sm') }}{{ button('Small secondary', variant='secondary', size='sm') }}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ FIELD ============================ -->
+  <section class="ui-section">
+    <h2>Input &amp; Textarea</h2>
+    <p class="ui-note">Surface fill, hairline border, 8px radius. Focus = accent border + soft ring. Labels are medium weight, not bold-black.</p>
+    <div class="ui-panel">
+      <div class="ui-grid ui-grid-2" style="align-items:start">
+        {{ field('Business name', name='f1', value='Heritage House Painting', help='Shown to customers in the text-back.') }}
+        {{ field('Service area', name='f2', placeholder='e.g. Greater metro · 30-mile radius', state='is-focus', help='Focused state') }}
+        {{ field('Owner name', name='f3', value='Jonathan') }}
+        {{ field('Account ID', name='f4', value='RB-00417', disabled=true, help='Disabled') }}
+        {{ field('Customer phone', name='f5', value='555314', error='Enter a 10-digit number, e.g. (555) 314-2270.') }}
+        {{ field('Available estimate times', name='f6') }}
+      </div>
+      <div style="margin-top:var(--space-6)">
+        {{ field('AI instructions', name='f7', textarea=true, rows=4, value='Be warm and human. Find out what they need painted, confirm they are in our service area, then offer two estimate windows and book the one they pick.', help='This is the voice your text-back speaks in.') }}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ BADGE ============================ -->
+  <section class="ui-section">
+    <h2>Badge / StatusPill</h2>
+    <p class="ui-note">Filled soft pills, rounded-full, consistent height — not outlined boxes.</p>
+    <div class="ui-blocks">
+      <div class="ui-row">
+        {{ pill('New', 'new') }}{{ pill('Booked', 'booked') }}{{ pill('Urgent', 'urgent') }}{{ pill('Pending', 'warning') }}{{ pill('Closed', 'neutral') }}
+      </div>
+      <div class="ui-stack">
+        <span class="ui-stack-label">With status dot</span>
+        <div class="ui-row">
+          {{ pill('New', 'new', dot=true) }}{{ pill('Booked', 'booked', dot=true) }}{{ pill('Urgent', 'urgent', dot=true) }}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CARD ============================ -->
+  <section class="ui-section">
+    <h2>Card</h2>
+    <p class="ui-note">Section titles inside a card are medium weight — not a marketing headline.</p>
+    <div class="ui-grid ui-grid-2" style="align-items:start">
+      {% call card(title='This week', subtitle='Heritage House Painting', actions=button('Export', variant='secondary', size='sm'), footer='Updated just now · syncs with your calendar') %}
+        <p style="margin:0;color:var(--ink-soft);font-size:var(--text-sm);line-height:1.6">Twelve new leads, nine booked estimates. Your average text-back time dropped to 4.2 seconds — fast enough to beat the next painter to the call.</p>
+      {% endcall %}
+      {% call card() %}
+        <span class="stars" aria-label="5 out of 5 stars">{{ star }}{{ star }}{{ star }}{{ star }}{{ star }}</span>
+        <p style="margin:var(--space-3) 0 0;font-size:var(--text-md);color:var(--ink);line-height:1.5">“It booked two estimates while I was on a ladder. Paid for itself the first week.”</p>
+        <p style="margin:var(--space-2) 0 0;font-size:var(--text-sm);color:var(--ink-faint)">Review stars use <code style="font-family:ui-monospace,Menlo,monospace">--star</code> (amber).</p>
+      {% endcall %}
+    </div>
+  </section>
+
+  <!-- ============================ STATTILE ============================ -->
+  <section class="ui-section">
+    <h2>StatTile</h2>
+    <p class="ui-note">Big number tight to its label, divided into a single card — no acres of empty space.</p>
+    {% call stat_row() %}
+      {{ stat_tile('128', 'Leads captured', sub='▲ 12 this week', sub_tone='good') }}
+      {{ stat_tile('86', 'Estimates booked', sub='▲ 9 this week', sub_tone='good') }}
+      {{ stat_tile('4.2s', 'Avg. text-back', sub='▼ 0.6s faster', sub_tone='good') }}
+      {{ stat_tile('3', 'Urgent flags', sub='Needs follow-up', sub_tone='bad') }}
+    {% endcall %}
+  </section>
+
+  <!-- ============================ DATATABLE ============================ -->
+  <section class="ui-section">
+    <h2>DataTable</h2>
+    <p class="ui-note">Uppercase faint headers, row hover, consistent padding. Phones use one format everywhere → <code>(555) 314-2270</code>. The 2nd row shows the hover state.</p>
+    {% call card(title='Recent leads', actions=button('New lead', variant='secondary', size='sm', icon=ic_plus), flush=true) %}
+      {% call data_table(['Customer','Phone','Job','Status','Received']) %}
+        <tr class="dt-row"><td class="dt-strong">Marcus Bell</td><td class="dt-muted">(555) 314-2270</td><td>Kitchen &amp; living room</td><td>{{ pill('Booked','booked') }}</td><td class="dt-muted">Jun 13</td></tr>
+        <tr class="dt-row is-hover"><td class="dt-strong">Dana Whitfield</td><td class="dt-muted">(555) 802-1190</td><td>Exterior repaint</td><td>{{ pill('New','new') }}</td><td class="dt-muted">Jun 13</td></tr>
+        <tr class="dt-row"><td class="dt-strong">Priya Anand</td><td class="dt-muted">(555) 477-6053</td><td>Water damage — ceiling</td><td>{{ pill('Urgent','urgent') }}</td><td class="dt-muted">Jun 12</td></tr>
+        <tr class="dt-row"><td class="dt-strong">Theo Russo</td><td class="dt-muted">(555) 219-8844</td><td>Cabinet refinishing</td><td>{{ pill('New','new') }}</td><td class="dt-muted">Jun 12</td></tr>
+        <tr class="dt-row"><td class="dt-strong">Lena Ortiz</td><td class="dt-muted">(555) 660-3127</td><td>Deck staining</td><td>{{ pill('Booked','booked') }}</td><td class="dt-muted">Jun 11</td></tr>
+      {% endcall %}
+    {% endcall %}
+  </section>
+
+  <!-- ============================ CHATBUBBLE ============================ -->
+  <section class="ui-section">
+    <h2>ChatBubble</h2>
+    <p class="ui-note">The hero proof. Agent (right, dark, AI spark) vs customer (left, light, initial), asymmetric tail, per-message timestamps. Bubbles stay ink/surface so the orange accent doesn't flood the thread.</p>
+    <div class="ui-grid ui-grid-2" style="align-items:start">
+      <div class="ui-phone">
+        <div class="ui-phone-head">
+          <div class="ui-phone-id">
+            <span class="ui-phone-name">Marcus Bell</span>
+            <span class="ui-phone-sub">(555) 314-2270</span>
+          </div>
+          {{ pill('Booked','booked', dot=true) }}
+        </div>
+        {% call chat_thread() %}
+          {{ chat_meta('Missed call · Today 2:14 PM') }}
+          {{ chat_bubble('Hi! This is Heritage House Painting — sorry we missed your call. What were you looking to get painted?', who='agent', time='2:14 PM') }}
+          {{ chat_bubble('Kitchen and living room', who='customer', time='2:15 PM', initial='M') }}
+          {{ chat_bubble('Got it. What part of town are you in?', who='agent', time='2:15 PM') }}
+          {{ chat_bubble('Downtown, near the river', who='customer', time='2:16 PM', initial='M') }}
+          {{ chat_bubble('Perfect — that’s in our area. I can get someone out Thursday at 10:00 AM for a free estimate. Want me to lock it in?', who='agent', time='2:16 PM') }}
+          {{ chat_bubble('Yes please', who='customer', time='2:17 PM', initial='M') }}
+          {{ chat_bubble('Booked! You’re set for Thursday 10:00 AM. We’ll text a reminder the day before.', who='agent', time='2:17 PM') }}
+        {% endcall %}
+      </div>
+      <div class="ui-blocks">
+        <div class="ui-stack">
+          <span class="ui-stack-label">Agent (AI) — single</span>
+          {% call chat_thread() %}{{ chat_bubble('We can do Thursday at 10. Want me to book it?', who='agent', time='2:16 PM') }}{% endcall %}
+        </div>
+        <div class="ui-stack">
+          <span class="ui-stack-label">Customer — single</span>
+          {% call chat_thread() %}{{ chat_bubble('Sounds good, thanks!', who='customer', time='2:17 PM', initial='M') }}{% endcall %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ EMPTYSTATE ============================ -->
+  <section class="ui-section">
+    <h2>EmptyState</h2>
+    <p class="ui-note">Icon + one line of guidance + (when useful) the primary action. Never bare gray text.</p>
+    <div class="ui-grid ui-grid-2" style="align-items:start">
+      <div class="card">{{ empty_state('No leads yet', 'When a missed call comes in, RingBack texts the caller and the new lead shows up right here.', action_label='Try the live demo', action_href='/simulator') }}</div>
+      <div class="card">{{ empty_state('No conversation selected', 'Pick a lead from the list to read the full text thread.', icon=ic_chat) }}</div>
+    </div>
+  </section>
+
+  <footer class="ui-foot">
+    RingBack design system · tokens in <code>static/ui.css</code> · components in <code>templates/components/ui/</code> · this gallery at <code>/ui</code>
+  </footer>
+
+</main>
+</body>
+</html>

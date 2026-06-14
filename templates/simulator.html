@@ -1,0 +1,48 @@
+{% extends "app_shell.html" %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/card.html" import card %}
+{% from "components/ui/empty_state.html" import empty_state %}
+
+{% set ic_play %}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>{% endset %}
+{% set ic_chat %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>{% endset %}
+
+{% block title %}Demo{% endblock %}
+{% block page_title %}Live demo{% endblock %}
+{% block page_sub %}<p class="page-sub">See exactly what your customer feels the moment you miss their call.</p>{% endblock %}
+
+{% block content %}
+<div class="sim-2col">
+  <div class="sim-explain">
+    {% call card(title='Try it yourself') %}
+      <p class="sim-lead">Hit <strong>Simulate missed call</strong> to fire the instant text-back, then reply as if you’re the homeowner. Watch {{ app_name }} qualify the job and book the estimate.</p>
+      {{ button('Simulate missed call', id='trigger', icon=ic_play) }}
+      <div id="sim-status" class="sim-status" aria-live="polite"></div>
+    {% endcall %}
+
+    <details class="dev-panel">
+      <summary>Developer</summary>
+      <div class="dev-body">
+        <p>Conversation engine: <strong>{% if brain == 'claude' %}Claude (live){% elif brain == 'minimax' %}MiniMax (live){% else %}Built-in demo responder{% endif %}</strong>.</p>
+        {% if brain == 'demo' %}<p>Set <code>MINIMAX_API_KEY</code> to run the MiniMax brain, or <code>RINGBACK_PROVIDER=claude</code> with <code>ANTHROPIC_API_KEY</code> for Claude.</p>{% endif %}
+      </div>
+    </details>
+  </div>
+
+  <div class="sim-device">
+    <div class="sim-device-head">
+      <div class="sim-id">
+        <span class="sim-name">{{ business.name }}</span>
+        <span class="sim-sub">{{ ('Texting ' ~ business.phone) if business.phone else 'Add your number in Settings' }}</span>
+      </div>
+      <span class="sim-live"><span class="dot"></span> Live</span>
+    </div>
+    <div id="thread" class="chat sim-thread" aria-live="polite" aria-label="Text conversation">
+      {{ empty_state('No conversation yet', 'Simulate a missed call to start the text-back.', icon=ic_chat) }}
+    </div>
+    <form id="reply-form" class="sim-composer">
+      <input id="reply-input" class="field-control" type="text" placeholder="Text as the homeowner…" autocomplete="off" disabled>
+      {{ button('Send', type='submit', disabled=true) }}
+    </form>
+  </div>
+</div>
+{% endblock %}

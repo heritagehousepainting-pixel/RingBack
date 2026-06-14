@@ -1,0 +1,222 @@
+/* ============================================================================
+   RingBack — Marketing pages (Product, Solutions, Resources, Company, Pricing,
+   Contact). Cohesive with the front door: reuses .ob-nav / .ob-btn from
+   onboarding.css for the header, adds sticky chrome, footer, and section
+   patterns. Built on ui.css tokens (Archivo, Safety Orange).
+   ============================================================================ */
+
+.mk{margin:0;min-height:100vh;font-family:var(--font);background:var(--bg);color:var(--ink);
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+
+/* ---- Sticky header (wraps the shared .ob-nav) ---- */
+.mk-nav{position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border)}
+.ob-links a.active{opacity:1;color:var(--accent-strong)}
+
+.mk-main{flex:1}
+.mk-wrap{width:100%;max-width:1140px;margin:0 auto;padding:0 clamp(20px,4vw,40px)}
+
+/* ---- Page header ---- */
+.mk-head{position:relative;text-align:center;padding:clamp(56px,8vw,104px) 0 clamp(40px,6vw,72px);
+  background:linear-gradient(180deg,#FFF3EA 0%, rgba(255,243,234,0) 100%)}
+.mk-eyebrow{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent-strong);margin-bottom:18px}
+.mk-h1{margin:0 auto;max-width:18ch;font-size:clamp(2.3rem,5vw,3.9rem);font-weight:900;
+  letter-spacing:-.03em;line-height:1.02}
+.mk-h1 .dot{color:var(--accent)}
+.mk-lead{margin:22px auto 0;max-width:60ch;font-size:clamp(1.05rem,1.5vw,1.3rem);
+  line-height:1.55;color:var(--ink-soft)}
+.mk-head-actions{margin-top:34px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* ---- Sections ---- */
+.mk-section{padding:clamp(48px,7vw,88px) 0}
+.mk-section + .mk-section{padding-top:0}
+.mk-section-head{max-width:680px;margin:0 0 clamp(28px,4vw,44px)}
+.mk-section-head.center{margin-left:auto;margin-right:auto;text-align:center}
+.mk-kicker{display:block;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-strong);margin-bottom:14px}
+.mk-h2{margin:0;font-size:clamp(1.7rem,3.4vw,2.6rem);font-weight:800;letter-spacing:-.025em;line-height:1.08}
+.mk-section-head p{margin:14px 0 0;font-size:1.1rem;line-height:1.55;color:var(--ink-soft)}
+
+/* ---- Grids & feature cards ---- */
+.mk-grid{display:grid;gap:24px}
+.mk-grid-2{grid-template-columns:repeat(2,1fr)}
+.mk-grid-3{grid-template-columns:repeat(3,1fr)}
+.mk-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:30px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:12px;height:100%}
+.mk-card h3{margin:0;font-size:1.2rem;font-weight:700;letter-spacing:-.01em}
+.mk-card p{margin:0;font-size:1rem;line-height:1.55;color:var(--ink-soft)}
+.mk-card .more{margin-top:auto;padding-top:8px;font-size:.92rem;font-weight:600;color:var(--accent-strong);text-decoration:none}
+.mk-ico{display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:12px;
+  background:var(--accent-bg);color:var(--accent-strong)}
+.mk-ico svg{width:24px;height:24px}
+.mk-index{font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--ink-faint)}
+
+/* Compact trade tiles (Solutions “by trade” grid) — neat & low-scroll */
+.mk-trades{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.mk-trade{display:flex;align-items:center;gap:12px;padding:13px 15px;background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;transition:border-color .12s ease,box-shadow .12s ease}
+.mk-trade:hover{border-color:var(--border-strong);box-shadow:var(--shadow-card)}
+.mk-trade .mk-ico{flex:0 0 auto;width:36px;height:36px;border-radius:9px}
+.mk-trade .mk-ico svg{width:19px;height:19px}
+.mk-trade .name{font-size:.97rem;font-weight:600;line-height:1.25;color:var(--ink)}
+
+/* ---- Alternating feature rows ---- */
+.mk-row{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,6vw,72px);align-items:center;
+  padding:clamp(36px,5vw,56px) 0}
+.mk-row + .mk-row{border-top:1px solid var(--border)}
+.mk-row .mk-visual{aspect-ratio:4/3;border-radius:18px;border:1px solid var(--border);
+  background:linear-gradient(150deg,#FFF1E5 0%, #FCD7B8 55%, #F49A5B 100%);
+  box-shadow:var(--shadow-card);display:flex;align-items:center;justify-content:center;color:#fff}
+.mk-row .mk-visual svg{width:88px;height:88px;opacity:.9;filter:drop-shadow(0 6px 14px rgba(120,40,0,.25))}
+.mk-row.flip .mk-copy{order:2}
+.mk-row h3{margin:0;font-size:clamp(1.4rem,2.4vw,2rem);font-weight:800;letter-spacing:-.02em}
+.mk-row p{margin:14px 0 0;font-size:1.08rem;line-height:1.6;color:var(--ink-soft)}
+.mk-row ul{margin:18px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.mk-row li{display:flex;gap:10px;align-items:flex-start;font-size:1rem;color:var(--ink)}
+.mk-check{flex:0 0 auto;margin-top:2px;color:var(--accent)}
+.mk-check svg{width:18px;height:18px}
+
+/* ---- Steps ---- */
+.mk-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+.mk-step .n{font-size:2.4rem;font-weight:900;letter-spacing:-.04em;color:var(--accent);line-height:1}
+.mk-step h3{margin:14px 0 6px;font-size:1.2rem;font-weight:700}
+.mk-step p{margin:0;color:var(--ink-soft);line-height:1.55}
+
+/* ---- Pricing ---- */
+.mk-price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;align-items:start}
+.mk-price{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:18px;
+  padding:32px;display:flex;flex-direction:column;gap:18px;box-shadow:var(--shadow-card)}
+.mk-price.featured{border-color:var(--accent);box-shadow:0 16px 48px rgba(234,88,12,.18);transform:translateY(-6px)}
+.mk-price .tier{font-size:1.05rem;font-weight:700}
+.mk-price .price{display:flex;align-items:baseline;gap:6px}
+.mk-price .amount{font-size:3rem;font-weight:900;letter-spacing:-.04em}
+.mk-price .per{font-size:.95rem;color:var(--ink-faint)}
+.mk-price .blurb{font-size:.95rem;color:var(--ink-soft);margin:0}
+.mk-price ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px}
+.mk-price li{display:flex;gap:10px;font-size:.95rem;color:var(--ink)}
+.mk-price .featured-flag{position:absolute;top:-12px;left:32px}
+.mk-price .ob-btn{width:100%;margin-top:auto}
+
+/* ---- FAQ ---- */
+.mk-faq{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:0}
+.mk-faq details{border-bottom:1px solid var(--border);padding:18px 0}
+.mk-faq summary{font-size:1.1rem;font-weight:600;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.mk-faq summary::-webkit-details-marker{display:none}
+.mk-faq summary::after{content:"+";color:var(--accent-strong);font-weight:700}
+.mk-faq details[open] summary::after{content:"–"}
+.mk-faq p{margin:12px 0 0;color:var(--ink-soft);line-height:1.6}
+
+/* ---- Stat band ---- */
+.mk-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;text-align:center}
+.mk-stat .big{font-size:clamp(2.2rem,4vw,3.2rem);font-weight:900;letter-spacing:-.03em;color:var(--ink)}
+.mk-stat .lbl{margin-top:6px;color:var(--ink-soft)}
+
+/* ---- Contact ---- */
+.mk-contact{display:grid;grid-template-columns:1fr 1.1fr;gap:clamp(32px,6vw,72px);align-items:start;
+  padding:clamp(40px,6vw,72px) 0}
+.mk-contact .lead-col h1{margin:0;font-size:clamp(2.1rem,4vw,3.2rem);font-weight:900;letter-spacing:-.03em;line-height:1.04}
+.mk-contact .lead-col p{margin:18px 0 0;font-size:1.1rem;line-height:1.6;color:var(--ink-soft);max-width:42ch}
+.mk-contact .pts{margin:26px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:14px}
+.mk-contact .pts li{display:flex;gap:12px;align-items:flex-start;color:var(--ink)}
+.mk-form-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:clamp(24px,3vw,36px);
+  box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:16px}
+.mk-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ---- CTA band ---- */
+.mk-cta{position:relative;overflow:hidden;color:#fff;text-align:center;
+  padding:clamp(56px,8vw,92px) 24px;
+  background-color:#C24E0E;
+  background-image:
+    radial-gradient(60% 120% at 85% 10%, #F77E2E 0%, rgba(247,126,46,0) 60%),
+    radial-gradient(60% 120% at 12% 100%, #9A3D08 0%, rgba(154,61,8,0) 60%),
+    linear-gradient(125deg,#EF6A1C 0%,#E5610F 45%,#C24E0E 100%)}
+.mk-cta h2{margin:0 auto;max-width:20ch;font-size:clamp(1.9rem,4vw,3rem);font-weight:900;letter-spacing:-.03em;line-height:1.05}
+.mk-cta p{margin:16px auto 0;max-width:48ch;font-size:1.1rem;color:rgba(255,255,255,.92)}
+.mk-cta-actions{margin-top:30px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.mk-btn-white{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 26px;
+  border-radius:12px;background:#fff;color:var(--ink);font-size:16px;font-weight:700;text-decoration:none;
+  box-shadow:0 4px 16px rgba(0,0,0,.18);transition:transform .12s ease}
+.mk-btn-white:hover{transform:translateY(-1px)}
+.mk-btn-ghost-light{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 24px;
+  border-radius:12px;background:rgba(255,255,255,.12);color:#fff;font-size:16px;font-weight:700;text-decoration:none;
+  border:1px solid rgba(255,255,255,.35)}
+.mk-btn-ghost-light:hover{background:rgba(255,255,255,.2)}
+/* Focus rings on the orange CTA band need to be light to show (the global
+   accent ring would be orange-on-orange). */
+.mk-cta a:focus-visible,.mk-btn-white:focus-visible,.mk-btn-ghost-light:focus-visible{
+  outline:2px solid #fff;outline-offset:3px}
+
+/* big nav buttons for hero CTAs */
+.ob-btn-lg{height:52px;padding:0 28px;font-size:16px;border-radius:13px}
+
+/* ---- Footer ---- */
+.mk-footer{background:var(--ink);color:#fff}
+.mk-footer-top{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:32px;
+  padding:clamp(48px,6vw,72px) clamp(20px,4vw,40px);max-width:1220px;margin:0 auto}
+.mk-footer-brand .ob-logo,.mk-footer-brand .brand{display:inline-flex;align-items:center;gap:10px;
+  color:#fff;text-decoration:none;font-size:20px;font-weight:800;letter-spacing:-.02em}
+.mk-footer-brand .mark{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+  border-radius:8px;background:var(--accent);color:#fff}
+.mk-footer-brand .mark svg{width:18px;height:18px}
+.mk-footer-brand p{margin:16px 0 0;max-width:30ch;font-size:.95rem;line-height:1.55;color:rgba(255,255,255,.6)}
+.mk-fcol h4{margin:0 0 16px;font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+.mk-fcol a{display:block;margin-bottom:11px;font-size:.95rem;color:rgba(255,255,255,.78);text-decoration:none}
+.mk-fcol a:hover{color:#fff}
+.mk-footer-bot{border-top:1px solid rgba(255,255,255,.12)}
+.mk-footer-bot-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  max-width:1220px;margin:0 auto;padding:20px clamp(20px,4vw,40px);font-size:.85rem;color:rgba(255,255,255,.55)}
+.mk-footer-bot-inner a{color:rgba(255,255,255,.72);text-decoration:none}
+.mk-footer-bot-inner a:hover{color:#fff}
+.mk-footer-brand .mk-loc{margin-top:12px;font-size:.9rem;font-weight:500;color:rgba(255,255,255,.45)}
+
+/* ---- Legal pages (Terms / Privacy) ---- */
+.mk-legal{max-width:760px;margin:0 auto}
+.mk-legal .updated{margin:0 0 10px;font-size:.9rem;color:var(--ink-faint)}
+.mk-legal h2{margin:36px 0 12px;font-size:1.3rem;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.mk-legal h3{margin:22px 0 8px;font-size:1.05rem;font-weight:700;color:var(--ink)}
+.mk-legal p,.mk-legal li{font-size:1rem;line-height:1.7;color:var(--ink-soft)}
+.mk-legal p{margin:0 0 14px}
+.mk-legal ul{margin:0 0 16px;padding-left:22px;display:flex;flex-direction:column;gap:8px}
+.mk-legal a{color:var(--accent-strong);text-decoration:underline}
+.mk-legal .addr{margin-top:6px;font-weight:600;line-height:1.7;color:var(--ink)}
+
+/* ---- Resource leaf pages (guides, help, blog, customers, webinars, templates) ---- */
+a.mk-eyebrow{text-decoration:none}
+a.mk-eyebrow:hover{opacity:.7}
+.mk-post{max-width:720px;margin:0 auto}
+.mk-post + .mk-post{margin-top:40px;padding-top:40px;border-top:1px solid var(--border)}
+.mk-post h2{margin:0 0 6px;font-size:1.6rem;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+.mk-post .mk-meta{margin:0 0 16px;font-size:.88rem;color:var(--ink-faint)}
+.mk-post p{margin:0 0 14px;font-size:1.05rem;line-height:1.7;color:var(--ink-soft)}
+.mk-code{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+  padding:16px 18px;margin:12px 0 14px;font-size:.95rem;line-height:1.6;color:var(--ink);white-space:pre-wrap}
+.mk-faq .use{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accent-strong);text-decoration:none}
+.mk-faq .use:hover{text-decoration:underline}
+.mk-story{display:flex;flex-direction:column;gap:14px}
+.mk-story .stars{display:inline-flex;gap:2px;color:var(--star)}
+.mk-story .stars svg{width:18px;height:18px;fill:currentColor}
+.mk-story blockquote{margin:0;font-size:1.12rem;line-height:1.5;font-weight:500;color:var(--ink)}
+.mk-story .who{font-size:.95rem;color:var(--ink-soft)}
+.mk-story .result{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);font-size:.92rem;color:var(--ink-faint)}
+.mk-story .result b{color:var(--accent-strong);font-weight:700}
+.mk-webinar{display:grid;grid-template-columns:1.1fr 1fr;gap:clamp(28px,5vw,56px);align-items:center;
+  background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow-card);
+  padding:clamp(24px,4vw,44px)}
+.mk-webinar .when{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;font-size:.9rem;font-weight:600;color:var(--accent-strong)}
+.mk-webinar h3{margin:0 0 12px;font-size:clamp(1.5rem,2.6vw,2rem);font-weight:800;letter-spacing:-.02em}
+.mk-webinar p{margin:0 0 18px;color:var(--ink-soft);line-height:1.6}
+.mk-webinar ul{margin:0 0 22px;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.mk-webinar li{display:flex;gap:10px;color:var(--ink)}
+
+/* ---- Responsive ---- */
+@media(max-width:860px){
+  .mk-webinar{grid-template-columns:1fr}
+  .mk-trades{grid-template-columns:repeat(2,1fr)}
+  .mk-grid-2,.mk-grid-3,.mk-steps,.mk-price-grid,.mk-stats,.mk-form-grid{grid-template-columns:1fr}
+  .mk-row,.mk-contact{grid-template-columns:1fr}
+  .mk-row.flip .mk-copy{order:0}
+  .mk-price.featured{transform:none}
+  .mk-footer-top{grid-template-columns:1fr 1fr}
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }} — Every missed call, booked by AI in seconds</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/ui.css">
+  <link rel="stylesheet" href="/static/onboarding.css">
+</head>
+<body class="ob">
+<div class="ob-hero">
+  <div class="ob-bg" aria-hidden="true"></div>
+
+  <header class="ob-nav">
+    <a class="ob-logo" href="/">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v6"/></svg></span>
+      {{ app_name }}
+    </a>
+    <button class="ob-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="ob-menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="ob-menu" id="ob-menu">
+      <nav class="ob-links">
+        <a href="/product">Product</a>
+        <a href="/solutions">Solutions</a>
+        <a href="/resources">Resources</a>
+        <a href="/company">Company</a>
+        <a href="/pricing">Pricing</a>
+      </nav>
+      <div class="ob-actions">
+        <a class="ob-login" href="/login">Log in</a>
+        <a class="ob-btn ob-btn-light" href="/contact">Talk to sales</a>
+        <a class="ob-btn ob-btn-accent" href="/signup">Sign up for free</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="ob-content">
+    <div class="ob-announce">
+      <span>From missed call to booked estimate — automatically</span>
+      <a class="ob-announce-cta" href="/simulator">See it live</a>
+    </div>
+
+    <h1 class="ob-title">Every missed call,<br>booked by AI in seconds<span class="dot">.</span></h1>
+
+    <p class="ob-sub">When you can’t pick up, RingBack texts the caller back, answers their questions,
+      and books the estimate. No missed jobs. No voicemail. No waiting.</p>
+
+    <div class="ob-toggle" role="tablist">
+      <button class="ob-seg active" type="button" data-seg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
+        Text
+      </button>
+      <button class="ob-seg" type="button" data-seg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>
+        Call
+      </button>
+    </div>
+
+    <form class="ob-input" action="/signup" method="get">
+      <input type="text" name="phone" placeholder="(555) 123-4567" autocomplete="off" aria-label="Your business number">
+      <button class="ob-submit" type="submit" aria-label="Start">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </form>
+
+    <a class="ob-try" href="/signup">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v6"/></svg>
+      Try it on your phone!
+    </a>
+  </main>
+
+  <button class="ob-chat" aria-label="Chat with us">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
+  </button>
+</div>
+
+<script>
+  // Segmented toggle (visual only), mirrors the reference Demo/Video switch.
+  document.querySelectorAll('[data-seg]').forEach(function (seg) {
+    seg.addEventListener('click', function () {
+      document.querySelectorAll('[data-seg]').forEach(function (s) { s.classList.remove('active'); });
+      seg.classList.add('active');
+    });
+  });
+</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

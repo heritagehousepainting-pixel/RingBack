@@ -1,0 +1,28 @@
+{% extends "marketing_base.html" %}
+{% set ic_guide %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>{% endset %}
+{% set ic_help %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>{% endset %}
+{% set ic_story %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-6 0v4M5 9h14l1 12H4L5 9z"/></svg>{% endset %}
+{% set ic_blog %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>{% endset %}
+{% set ic_webinar %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>{% endset %}
+{% set ic_tmpl %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>{% endset %}
+{% set arrow %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-1px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>{% endset %}
+
+{% block title %}Resources{% endblock %}
+{% block content %}
+<header class="mk-head"><div class="mk-wrap">
+  <span class="mk-eyebrow">Resources</span>
+  <h1 class="mk-h1">Get more out of every call<span class="dot">.</span></h1>
+  <p class="mk-lead">Guides, playbooks, and real stories from contractors who turned missed calls into a fuller schedule.</p>
+</div></header>
+
+<section class="mk-section"><div class="mk-wrap">
+  <div class="mk-grid mk-grid-3">
+    <div class="mk-card"><div class="mk-ico">{{ ic_guide }}</div><h3>Guides</h3><p>Step-by-step playbooks for setting up text-back, writing your AI instructions, and filling your calendar.</p><a class="more" href="/guides">Browse guides {{ arrow }}</a></div>
+    <div class="mk-card"><div class="mk-ico">{{ ic_help }}</div><h3>Help center</h3><p>Answers to setup, forwarding, billing, and scheduling questions — searchable and always current.</p><a class="more" href="/help">Visit help center {{ arrow }}</a></div>
+    <div class="mk-card"><div class="mk-ico">{{ ic_story }}</div><h3>Customer stories</h3><p>How painters, plumbers, and HVAC crews booked more work without hiring a front desk.</p><a class="more" href="/customers">Read stories {{ arrow }}</a></div>
+    <div class="mk-card"><div class="mk-ico">{{ ic_blog }}</div><h3>Blog</h3><p>Field notes on winning the speed-to-lead game and running a tighter home-services business.</p><a class="more" href="/blog">Read the blog {{ arrow }}</a></div>
+    <div class="mk-card"><div class="mk-ico">{{ ic_webinar }}</div><h3>Webinars</h3><p>Live walk-throughs and Q&A — see RingBack book a job and ask the team anything.</p><a class="more" href="/webinars">Save your spot {{ arrow }}</a></div>
+    <div class="mk-card"><div class="mk-ico">{{ ic_tmpl }}</div><h3>Templates</h3><p>Ready-made AI instruction templates by trade, so your text-back sounds right on day one.</p><a class="more" href="/templates">Get the templates {{ arrow }}</a></div>
+  </div>
+</div></section>
+{% endblock %}

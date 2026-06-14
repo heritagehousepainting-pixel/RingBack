@@ -1,0 +1,30 @@
+# Secrets — NEVER commit. .env holds the live MiniMax key + future Twilio/SMTP creds.
+.env
+.env.*
+
+# Local SQLite database + backups (contain customer PII + password hashes).
+*.db
+*.db-journal
+*.db-wal
+*.db.bak-*
+
+# Runtime / logs
+server.log
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+
+# Bulky local reference media (screen recordings, etc.)
+refs/**/*.mov
+refs/**/*.mp4
+
+# Reference docs that are their own git repo (not part of the deployable app)
+research/design-for-ai

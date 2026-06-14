@@ -1,0 +1,148 @@
+{% extends "app_shell.html" %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/card.html" import card %}
+{% from "components/ui/input.html" import field %}
+{% from "components/ui/badge.html" import pill %}
+
+{% macro provider_logo(key) -%}
+{%- if key == 'google' -%}
+<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.43a6.6 6.6 0 0 1 0-4.86V6.73H2.18a11 11 0 0 0 0 9.54l3.66-2.84z"/><path fill="#EA4335" d="M12 5.43c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 6.73l3.66 2.84C6.71 7.05 9.14 5.43 12 5.43z"/></svg>
+{%- elif key == 'apple' -%}
+<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 18.5H7.2A4.2 4.2 0 0 1 6.6 10.12a5.4 5.4 0 0 1 10.46-1.64A4.25 4.25 0 0 1 18 18.5z"/></svg>
+{%- elif key == 'outlook' -%}O{%- elif key == 'yahoo' -%}Y!{%- endif -%}
+{%- endmacro %}
+
+{% macro alert_toggle(name, label, on) -%}
+<label class="toggle">
+  <input type="checkbox" name="{{ name }}"{{ ' checked' if (on is none or on) else '' }}>
+  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+  <span class="toggle-label">{{ label }}</span>
+</label>
+{%- endmacro %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_sub %}<p class="page-sub">How {{ app_name }} represents {{ business.name }} to every caller.</p>{% endblock %}
+{% block header_actions %}{% if saved %}{{ pill('Saved', 'booked', dot=true) }}{% endif %}{% endblock %}
+
+{% block content %}
+<form method="post" class="settings-col">
+  {% call card(title='Business profile', subtitle='The basics your AI uses to sound like you.') %}
+    <div class="field-grid">
+      {{ field('Business name', name='name', value=business.name) }}
+      {{ field('Trade / services', name='trade', value=business.trade) }}
+      {{ field('Service area', name='service_area', value=business.service_area) }}
+      {{ field('Hours', name='hours', value=business.hours) }}
+      {{ field('Owner name', name='owner_name', value=business.owner_name) }}
+      {{ field('Phone (your RingBack number)', name='phone', value=business.phone, type='tel') }}
+      {{ field('Average job value (for ROI)', name='avg_job_value', value=(business.avg_job_value|int if business.avg_job_value else ''), type='number', placeholder='e.g. 4500', help='Powers the estimated revenue on the ROI page. Optional.') }}
+    </div>
+  {% endcall %}
+
+  {% call card(title='Connect your calendar', subtitle='Link Google Calendar so booked estimates show up there automatically and the AI never offers a time you’re already busy.') %}
+    {% if gconnected %}<p class="provider-note provider-note-ok">Google Calendar is connected. New estimates sync to it, and your busy times are kept open-free.</p>{% endif %}
+    {% if gerror %}<p class="provider-note provider-note-err">{{ 'Add your Google credentials to enable this.' if gerror == 'unconfigured' else 'We couldn’t finish connecting Google. Please try again.' }}</p>{% endif %}
+    <div class="provider-grid">
+      <div class="provider-card{{ ' is-connected' if google_connected else '' }}" data-provider="google">
+        <span class="provider-logo provider-logo-google">{{ provider_logo('google') }}</span>
+        <span class="provider-meta">
+          <span class="provider-name">Google Calendar</span>
+          <span class="provider-status">{{ 'Connected' if google_connected else ('Gmail / Workspace' if google_configured else 'Coming soon') }}</span>
+        </span>
+        {% if google_connected %}
+          <button type="button" class="btn btn-secondary btn-sm provider-btn" id="google-disconnect">Disconnect</button>
+        {% elif google_configured %}
+          <a class="btn btn-primary btn-sm provider-btn" href="/api/calendar/google/connect">Connect</a>
+        {% else %}
+          <button type="button" class="btn btn-secondary btn-sm provider-btn" disabled title="Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable">Coming soon</button>
+        {% endif %}
+      </div>
+      {% for p in [{'key':'outlook','name':'Outlook'}, {'key':'apple','name':'Apple iCloud'}, {'key':'yahoo','name':'Yahoo'}] %}
+      <div class="provider-card is-soon" data-provider="{{ p.key }}">
+        <span class="provider-logo provider-logo-{{ p.key }}">{{ provider_logo(p.key) }}</span>
+        <span class="provider-meta">
+          <span class="provider-name">{{ p.name }}</span>
+          <span class="provider-status">Coming soon</span>
+        </span>
+        <button type="button" class="btn btn-secondary btn-sm provider-btn" disabled>Coming soon</button>
+      </div>
+      {% endfor %}
+    </div>
+  {% endcall %}
+
+  {% call card(title='RingBack calendar', subtitle='Open days fill with booked estimates. Block the days you’re already busy and the AI won’t offer them.', flush=true) %}
+    <div class="cal" id="calendar" data-endpoint="/api/calendar">
+      <div class="cal-head">
+        <div class="cal-nav">
+          <button type="button" class="btn btn-secondary btn-sm cal-prev" aria-label="Previous month">‹</button>
+          <button type="button" class="btn btn-secondary btn-sm cal-today">Today</button>
+          <button type="button" class="btn btn-secondary btn-sm cal-next" aria-label="Next month">›</button>
+        </div>
+        <h4 class="cal-month" id="cal-month" aria-live="polite">—</h4>
+        <div class="cal-legend">
+          <span class="lg lg-est">Estimate</span>
+          <span class="lg lg-busy">Busy</span>
+          <span class="lg lg-today">Today</span>
+        </div>
+      </div>
+      <div class="cal-grid-wrap">
+        <div class="cal-dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+        <div class="cal-grid" id="cal-grid" role="group" aria-label="Calendar days"></div>
+      </div>
+      <div class="cal-detail" id="cal-detail" aria-live="polite"></div>
+    </div>
+  {% endcall %}
+
+  {% call card(title='Owner alerts', subtitle='Get notified the moment a lead comes in or an estimate books, so you can trust RingBack while you’re on the job.') %}
+    <div class="field-grid">
+      {{ field('Alert email', name='alert_email', value=business.alert_email or '', type='email', placeholder=owner_email or 'you@email.com', help=('Email alerts send via SMTP.' if email_configured else 'Email is simulated until SMTP is set up (see your to-do list).')) }}
+      {{ field('Alert text (your cell)', name='alert_sms', value=business.alert_sms or '', type='tel', placeholder='+1 555 123 4567', help=('Texts send via Twilio.' if sms_configured else 'Texts are simulated until Twilio is set up.')) }}
+    </div>
+    <div class="toggle-list">
+      {{ alert_toggle('alert_on_lead', 'A new lead comes in', business.alert_on_lead) }}
+      {{ alert_toggle('alert_on_booking', 'An estimate gets booked', business.alert_on_booking) }}
+      {{ alert_toggle('alert_on_urgent', 'A lead is flagged urgent', business.alert_on_urgent) }}
+    </div>
+    {% if not sms_configured and not email_configured %}
+    <p class="provider-note provider-note-soft">Texting and email aren’t connected yet, so alerts are recorded <strong>in-app</strong> only — you’ll see them on your dashboard. Add Twilio or SMTP to also get them by text or email.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card(title='Reminders & follow-ups', subtitle='Cut no-shows and revive cold leads — RingBack texts a reminder before each estimate and one nudge to a warm lead that goes quiet.') %}
+    <div class="toggle-list">
+      {{ alert_toggle('reminders_enabled', 'Text a reminder before each booked estimate', business.reminders_enabled) }}
+      {{ alert_toggle('followups_enabled', 'Send one nudge to a warm lead that goes quiet', business.followups_enabled) }}
+    </div>
+    <div class="field-grid" style="margin-top:var(--space-4)">
+      {{ field('Reminder lead time (hours before the estimate)', name='reminder_lead_hours', value=(business.reminder_lead_hours|int if business.reminder_lead_hours else 24), type='number', help='How far ahead of the appointment to send the reminder. Default 24.') }}
+    </div>
+    {% if not sms_configured %}
+    <p class="provider-note provider-note-soft">Texts are <strong>simulated</strong> until Twilio is set up — reminders still post to the lead’s conversation so you can see exactly what would go out.</p>
+    {% endif %}
+  {% endcall %}
+
+  {% call card(title='AI instructions', subtitle='The heart of it — how your AI talks and what it asks on every call.') %}
+    {{ field('What your AI should say and ask', name='ai_instructions', textarea=true, rows=8, value=business.ai_instructions, help='Write it like you’re briefing a sharp new front-desk hire.') }}
+  {% endcall %}
+
+  <div class="save-bar">
+    <span class="save-hint">Changes apply to new conversations immediately.</span>
+    {{ button('Save changes', type='submit') }}
+  </div>
+</form>
+
+<form method="post" action="/settings/password" class="settings-col" style="margin-top:var(--space-5)">
+  {% call card(title='Password', subtitle='Change the password you use to sign in to RingBack.') %}
+    {% if pw %}<p class="provider-note provider-note-ok">Your password has been updated.</p>{% endif %}
+    {% if pwerror %}<p class="provider-note provider-note-err">{{ {'current':'Your current password is incorrect.', 'short':'New password must be at least 8 characters.'}.get(pwerror, 'Could not update your password.') }}</p>{% endif %}
+    <div class="field-grid">
+      {{ field('Current password', name='current_password', type='password', required=true, autocomplete='current-password') }}
+      {{ field('New password', name='new_password', type='password', required=true, minlength='8', autocomplete='new-password') }}
+    </div>
+  {% endcall %}
+  <div class="save-bar">
+    <span class="save-hint">Use at least 8 characters.</span>
+    {{ button('Update password', type='submit') }}
+  </div>
+</form>
+{% endblock %}

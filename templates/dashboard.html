@@ -1,0 +1,94 @@
+{% extends "app_shell.html" %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/card.html" import card %}
+{% from "components/ui/data_table.html" import data_table %}
+{% from "components/ui/stat_tile.html" import stat_row, stat_tile %}
+{% from "components/ui/badge.html" import pill %}
+{% from "components/ui/empty_state.html" import empty_state %}
+
+{% set ic_phone %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>{% endset %}
+{% set ic_chat %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>{% endset %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_sub %}<p class="page-sub">Every missed call, conversation, and booked estimate in one place.</p>{% endblock %}
+{% block header_actions %}{{ button('Simulate a call', variant='secondary', href='/simulator', icon=ic_phone) }}{% endblock %}
+
+{% block content %}
+{% set urgent_count = leads|selectattr('urgent')|list|length %}
+{% set warm_count = leads|selectattr('stage','equalto','warm')|list|length %}
+{% set booked_pct = (stats.appointments / stats.leads * 100)|round|int if stats.leads else 0 %}
+
+{% call stat_row() %}
+  {{ stat_tile(stats.leads, 'Leads captured') }}
+  {{ stat_tile(stats.appointments, 'Estimates booked', sub=(booked_pct ~ '% of leads'), sub_tone=('good' if stats.appointments else '')) }}
+  {{ stat_tile(warm_count, 'Warm leads', sub=('In conversation' if warm_count else 'None active')) }}
+  {{ stat_tile(urgent_count, 'Urgent', sub=('Needs follow-up' if urgent_count else 'All clear'), sub_tone=('bad' if urgent_count else 'good')) }}
+{% endcall %}
+
+<div class="dash-2col">
+  {% call card(title='Leads', flush=true) %}
+    {% if leads %}
+      {% call data_table(['Customer','Phone','Stage','Received']) %}
+        {% for l in leads %}
+        <tr class="dt-row" data-id="{{ l.id }}" role="button" tabindex="0" aria-pressed="false" aria-label="Open conversation with {{ l.name }}">
+          <td class="dt-strong">{{ l.name }}</td>
+          <td class="dt-muted">{{ l.phone|phone }}</td>
+          <td>
+            {% if l.stage == 'scheduled' %}{{ pill('Scheduled','booked') }}
+            {% elif l.stage == 'warm' %}{{ pill('Warm','warning') }}
+            {% else %}{{ pill('New','neutral') }}{% endif %}
+            {% if l.urgent %} {{ pill('Urgent','urgent') }}{% endif %}
+          </td>
+          <td class="dt-muted">{{ l.created_at|nicedate }}</td>
+        </tr>
+        {% endfor %}
+      {% endcall %}
+    {% else %}
+      {{ empty_state('No leads yet', 'When a missed call comes in, RingBack texts the caller and the new lead lands right here.', action_label='Try the live demo', action_href='/simulator') }}
+    {% endif %}
+  {% endcall %}
+
+  {% call card(title='Conversation', flush=true, extra='convo-card') %}
+    <div id="lead-notes" class="lead-notes" aria-live="polite"></div>
+    <div id="convo" class="chat convo-scroll" aria-live="polite" aria-label="Conversation thread">
+      {{ empty_state('No conversation selected', 'Pick a lead from the list to read the full text thread.', icon=ic_chat) }}
+    </div>
+  {% endcall %}
+</div>
+
+{% call card(title='Scheduled estimates', flush=true) %}
+  {% if appointments %}
+    {% call data_table(['When','Customer','Phone','Reminder','']) %}
+      {% for a in appointments %}
+      {% set rs = reminder_state.get(a.id) %}
+      <tr><td class="dt-strong">{{ (a.day|slotwhen(a.slot_time)) or a.scheduled_for }}</td><td>{{ a.lead_name }}</td><td class="dt-muted">{{ a.lead_phone|phone }}</td>
+      <td>{% if rs and rs.status == 'sent' %}{{ pill('Reminder sent','booked') }}{% elif rs and rs.status == 'simulated' %}{{ pill('Reminder simulated','neutral') }}{% elif rs and rs.status == 'pending' %}{{ pill('Reminder set','neutral') }}{% elif rs and rs.status == 'skipped' %}{{ pill('No reminder','warning') }}{% elif rs and rs.status == 'failed' %}{{ pill('Reminder failed','urgent') }}{% else %}<span class="dt-muted">—</span>{% endif %}</td>
+      <td class="dt-actions"><button type="button" class="btn btn-ghost btn-sm appt-cancel" data-id="{{ a.id }}" data-when="{{ (a.day|slotwhen(a.slot_time)) or a.scheduled_for }}" aria-label="Cancel estimate for {{ a.lead_name }}">Cancel</button></td></tr>
+      {% endfor %}
+    {% endcall %}
+  {% else %}
+    {{ empty_state('No estimates booked yet', 'Estimates your AI books during a conversation show up here, ready for your calendar.') }}
+  {% endif %}
+{% endcall %}
+
+{% call card(title='Recent alerts', flush=true) %}
+  {% if alert_feed %}
+    {% call data_table(['Alert','When']) %}
+      {% for a in alert_feed %}
+      <tr>
+        <td class="dt-strong">
+          {% if a.kind == 'booking' %}{{ pill('Booked','booked') }}
+          {% elif a.kind == 'urgent' %}{{ pill('Urgent','urgent') }}
+          {% else %}{{ pill('Lead','new') }}{% endif %}
+          <span class="alert-body">{{ a.body }}</span>
+        </td>
+        <td class="dt-muted">{{ a.created_at|nicedate }}</td>
+      </tr>
+      {% endfor %}
+    {% endcall %}
+  {% else %}
+    {{ empty_state('No alerts yet', 'When a lead comes in or an estimate books, RingBack notes it here — and texts or emails you if you’ve set that up in Settings.') }}
+  {% endif %}
+{% endcall %}
+{% endblock %}

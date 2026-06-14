@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/ui.css">
+  <link rel="stylesheet" href="/static/onboarding.css">
+  <link rel="stylesheet" href="/static/marketing.css">
+</head>
+<body class="mk">
+{% set p = request.path %}
+<header class="ob-nav mk-nav">
+  <a class="ob-logo" href="/">
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v6"/></svg></span>
+    {{ app_name }}
+  </a>
+  <button class="ob-burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="ob-menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="ob-menu" id="ob-menu">
+    <nav class="ob-links">
+      <a href="/product" class="{{ 'active' if p.startswith('/product') }}">Product</a>
+      <a href="/solutions" class="{{ 'active' if p.startswith('/solutions') }}">Solutions</a>
+      <a href="/resources" class="{{ 'active' if p.startswith('/resources') }}">Resources</a>
+      <a href="/company" class="{{ 'active' if p.startswith('/company') }}">Company</a>
+      <a href="/pricing" class="{{ 'active' if p.startswith('/pricing') }}">Pricing</a>
+    </nav>
+    <div class="ob-actions">
+      <a class="ob-login" href="/login">Log in</a>
+      <a class="ob-btn ob-btn-light" href="/contact">Talk to sales</a>
+      <a class="ob-btn ob-btn-accent" href="/signup">Sign up for free</a>
+    </div>
+  </div>
+</header>
+
+<main class="mk-main">
+  {% block content %}{% endblock %}
+
+  {% block cta %}
+  <section class="mk-cta">
+    <h2>Ready to stop losing jobs to a missed call?</h2>
+    <p>Set up in a day. Flat monthly rate, no per-call fees. Cancel anytime.</p>
+    <div class="mk-cta-actions">
+      <a class="mk-btn-white" href="/signup">Sign up for free</a>
+      <a class="mk-btn-ghost-light" href="/contact">Talk to sales</a>
+    </div>
+  </section>
+  {% endblock %}
+</main>
+
+<footer class="mk-footer">
+  <div class="mk-footer-top">
+    <div class="mk-footer-brand">
+      <a class="brand" href="/">
+        <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v6"/></svg></span>
+        {{ app_name }}
+      </a>
+      <p>Instant missed-call text-back and AI booking for home-services contractors.</p>
+      <p class="mk-loc">Ambler, PA</p>
+    </div>
+    <div class="mk-fcol">
+      <h4>Product</h4>
+      <a href="/product">Overview</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/simulator">Live demo</a>
+    </div>
+    <div class="mk-fcol">
+      <h4>Explore</h4>
+      <a href="/solutions">Solutions</a>
+      <a href="/resources">Resources</a>
+      <a href="/company">About</a>
+    </div>
+    <div class="mk-fcol">
+      <h4>Get started</h4>
+      <a href="/signup">Sign up free</a>
+      <a href="/login">Log in</a>
+      <a href="/contact">Talk to sales</a>
+    </div>
+    <div class="mk-fcol">
+      <h4>Legal</h4>
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+    </div>
+  </div>
+  <div class="mk-footer-bot">
+    <div class="mk-footer-bot-inner">
+      <span>© 2026 {{ app_name }} — Ambler, PA. Built by people who run a real crew.</span>
+    </div>
+  </div>
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{# StatTile — big number tight to its label. Wrap tiles in a divided row card:
+     {% call stat_row() %}{{ stat_tile('128','Leads', sub='▲ 12 this week', sub_tone='good') }}…{% endcall %}
+   sub_tone: good (green) | bad (red) | '' (faint). Put the arrow glyph in `sub`. #}
+{% macro stat_row() -%}
+<div class="stat-row">{{ caller() }}</div>
+{%- endmacro %}
+
+{% macro stat_tile(value, label, sub=None, sub_tone='') -%}
+<div class="stat-tile">
+  <div class="stat-value">{{ value }}</div>
+  <div class="stat-label">{{ label }}</div>
+  {% if sub %}<div class="stat-sub {{ sub_tone }}">{{ sub }}</div>{% endif %}
+</div>
+{%- endmacro %}

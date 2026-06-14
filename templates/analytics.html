@@ -1,0 +1,29 @@
+{% extends "app_shell.html" %}
+{% from "components/ui/card.html" import card %}
+
+{% block title %}ROI{% endblock %}
+{% block page_title %}ROI{% endblock %}
+{% block page_sub %}<p class="page-sub">What {{ app_name }} has recovered for {{ business.name }} — leads captured, estimates booked, and an estimate of the revenue that would have walked.</p>{% endblock %}
+
+{% block content %}
+<div id="roi" data-endpoint="/api/analytics">
+  <div class="roi-range" role="group" aria-label="Time range">
+    <button type="button" class="btn btn-secondary btn-sm roi-r is-active" data-range="30d" aria-pressed="true">30 days</button>
+    <button type="button" class="btn btn-secondary btn-sm roi-r" data-range="90d" aria-pressed="false">90 days</button>
+    <button type="button" class="btn btn-secondary btn-sm roi-r" data-range="all" aria-pressed="false">All time</button>
+  </div>
+
+  <div id="roi-tiles" class="stat-row" aria-live="polite"></div>
+
+  {% call card(title='Leads vs booked estimates', subtitle='Per day in the selected window.') %}
+    <div class="roi-legend">
+      <span class="roi-key roi-key-leads">Leads</span>
+      <span class="roi-key roi-key-booked">Booked estimates</span>
+    </div>
+    <div id="roi-chart" class="roi-chart" aria-live="polite"></div>
+  {% endcall %}
+
+  <p class="roi-foot">Revenue is an <strong>estimate</strong> based on the average job value you set in
+    <a href="/settings">Settings</a> — not collected money.</p>
+</div>
+{% endblock %}

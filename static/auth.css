@@ -1,0 +1,62 @@
+/* ============================================================================
+   RingBack — Sign up / Sign in. Split layout: orange brand panel + form.
+   Loads after ui.css (tokens, Archivo, the field/button component styles).
+   ============================================================================ */
+
+.au{margin:0;min-height:100vh;font-family:var(--font);background:var(--bg);color:var(--ink);
+  -webkit-font-smoothing:antialiased}
+.au-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.04fr);min-height:100vh}
+
+/* ---- Left brand panel (orange) ---- */
+.au-art{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:40px;
+  padding:clamp(32px,4vw,56px);color:#fff;overflow:hidden;
+  background-color:#C24E0E;
+  background-image:
+    radial-gradient(60% 55% at 85% 15%, #F77E2E 0%, rgba(247,126,46,0) 60%),
+    radial-gradient(70% 70% at 15% 100%, #9A3D08 0%, rgba(154,61,8,0) 60%),
+    radial-gradient(50% 45% at 50% 55%, #F2741C 0%, rgba(242,116,28,0) 65%),
+    linear-gradient(150deg, #EF6A1C 0%, #E5610F 42%, #C24E0E 74%, #9A3D08 100%);}
+.au-art > *{position:relative;z-index:1}
+.au-logo{display:inline-flex;align-items:center;gap:10px;color:#fff;text-decoration:none;
+  font-size:20px;font-weight:800;letter-spacing:-.02em}
+.au-logo .mark{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+  border-radius:8px;background:rgba(255,255,255,.18);color:#fff}
+.au-logo .mark svg{width:18px;height:18px}
+.au-art-body{max-width:34ch}
+.au-art-title{font-size:clamp(2rem,3.2vw,2.9rem);font-weight:900;letter-spacing:-.03em;line-height:1.02;margin:0}
+.au-art-sub{font-size:1.05rem;line-height:1.55;color:rgba(255,255,255,.92);margin:18px 0 0}
+.au-proof{padding:20px 22px;border-radius:14px;background:rgba(11,14,20,.18);
+  border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(6px);max-width:42ch}
+.au-stars{display:inline-flex;gap:2px;color:var(--star)}
+.au-stars svg{width:16px;height:16px;fill:currentColor}
+.au-quote{font-size:1.05rem;line-height:1.45;font-weight:500;margin:12px 0 0;color:#fff}
+.au-by{font-size:.85rem;margin:10px 0 0;color:rgba(255,255,255,.8)}
+.au-foot{font-size:.8rem;color:rgba(255,255,255,.7);margin:0}
+
+/* ---- Right form panel ---- */
+.au-form-col{display:flex;align-items:center;justify-content:center;padding:clamp(28px,4vw,48px);
+  background:var(--bg)}
+.au-form{width:100%;max-width:400px}
+.au-switch{display:inline-flex;padding:4px;border-radius:999px;background:var(--surface-2);margin-bottom:30px}
+.au-switch a{padding:7px 18px;border-radius:999px;font-size:14px;font-weight:600;color:var(--ink-soft);
+  text-decoration:none;transition:background .12s,color .12s}
+.au-switch a.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(11,14,20,.12)}
+.au-title{font-size:1.85rem;font-weight:800;letter-spacing:-.02em;margin:0 0 6px}
+.au-sub{font-size:.95rem;color:var(--ink-soft);margin:0 0 26px}
+.au-error{margin:0 0 18px;padding:10px 14px;border-radius:8px;font-size:.9rem;
+  color:#b42318;background:#fef3f2;border:1px solid #fecdca}
+.au-fields{display:flex;flex-direction:column;gap:16px}
+.au-forgot{align-self:flex-end;margin:-6px 0 0;font-size:.85rem;font-weight:500;
+  color:var(--accent-strong);text-decoration:none}
+.au-forgot:hover{text-decoration:underline}
+.au-fields .btn{margin-top:8px;height:46px;font-size:var(--text-base)}
+.au-alt{margin:24px 0 0;text-align:center;font-size:.92rem;color:var(--ink-soft)}
+.au-alt a{color:var(--accent-strong);font-weight:600;text-decoration:none}
+.au-alt a:hover{text-decoration:underline}
+.au-terms{margin:20px 0 0;text-align:center;font-size:.78rem;line-height:1.5;color:var(--ink-faint)}
+.au-terms a{color:var(--ink-soft);text-decoration:underline}
+
+@media(max-width:840px){
+  .au-wrap{grid-template-columns:1fr}
+  .au-art{display:none}
+}

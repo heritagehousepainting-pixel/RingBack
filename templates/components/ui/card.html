@@ -1,0 +1,19 @@
+{# Card — surface + border + subtle shadow. Use with {% call %}:
+     {% call card(title='Leads', actions=button('New', size='sm')) %} ...body... {% endcall %}
+   `actions` takes raw markup (e.g. a button() call). `flush` removes body padding
+   (for tables). `footer` takes raw markup for a footer bar. #}
+{% macro card(title=None, subtitle=None, actions=None, footer=None, flush=False, extra='') -%}
+<div class="card{{ (' ' ~ extra) if extra else '' }}">
+  {%- if title or subtitle or actions -%}
+  <div class="card-head">
+    <div class="card-head-text">
+      {% if title %}<h3 class="card-title">{{ title }}</h3>{% endif %}
+      {% if subtitle %}<p class="card-subtitle">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if actions %}<div class="card-actions">{{ actions|safe }}</div>{% endif %}
+  </div>
+  {%- endif -%}
+  <div class="card-body{{ ' is-flush' if flush else '' }}">{{ caller() }}</div>
+  {% if footer %}<div class="card-foot">{{ footer|safe }}</div>{% endif %}
+</div>
+{%- endmacro %}

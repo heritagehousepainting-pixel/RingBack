@@ -1,0 +1,28 @@
+{# ChatBubble — the hero proof. Build a thread with:
+     {% call chat_thread() %}
+       {{ chat_meta('Missed call · Today 2:14 PM') }}
+       {{ chat_bubble('Hi! Sorry we missed you…', who='agent', time='2:14 PM') }}
+       {{ chat_bubble('Kitchen & living room', who='customer', time='2:15 PM', initial='M') }}
+     {% endcall %}
+   who: agent (right, dark, AI spark avatar) | customer (left, light, initial avatar). #}
+{% macro chat_thread(extra='') -%}
+<div class="chat{{ (' ' ~ extra) if extra else '' }}">{{ caller() }}</div>
+{%- endmacro %}
+
+{% macro chat_meta(text) -%}
+<div class="chat-meta">{{ text }}</div>
+{%- endmacro %}
+
+{% macro chat_bubble(text, who='customer', time=None, initial=None) -%}
+<div class="msg msg-{{ who }}">
+  {%- if who == 'agent' -%}
+  <span class="msg-avatar" aria-label="AI assistant"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.7 6.1L20 10l-6.3 1.9L12 18l-1.7-6.1L4 10l6.3-1.9z"/></svg></span>
+  {%- else -%}
+  <span class="msg-avatar">{{ initial if initial else 'C' }}</span>
+  {%- endif -%}
+  <div class="msg-stack">
+    <div class="msg-bubble">{{ text }}</div>
+    {% if time %}<span class="msg-time">{{ time }}</span>{% endif %}
+  </div>
+</div>
+{%- endmacro %}

@@ -1,0 +1,46 @@
+{% extends "marketing_base.html" %}
+{% from "components/ui/input.html" import field %}
+{% set check %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>{% endset %}
+
+{% block title %}Talk to sales{% endblock %}
+{% block content %}
+<section class="mk-section" style="padding-top:clamp(40px,6vw,72px)"><div class="mk-wrap">
+  <div class="mk-contact">
+    <div class="lead-col">
+      <span class="mk-eyebrow">Talk to sales</span>
+      <h1>Let’s get your phone working for you.</h1>
+      <p>Tell us about your business and we’ll show you exactly how RingBack books jobs from the calls you miss — then get you live the same week.</p>
+      <ul class="pts">
+        <li><span class="mk-check">{{ check }}</span> A 15-minute walk-through — no slides</li>
+        <li><span class="mk-check">{{ check }}</span> Set up on your real phone number</li>
+        <li><span class="mk-check">{{ check }}</span> Straight answers on pricing</li>
+      </ul>
+    </div>
+
+    <div>
+      {% if sent %}
+      <div class="mk-form-card" style="align-items:center;text-align:center;gap:14px">
+        <div class="mk-ico" style="width:56px;height:56px">{{ check }}</div>
+        <h3 style="margin:0;font-size:1.4rem;font-weight:800;letter-spacing:-.02em">Thanks — we’ll be in touch.</h3>
+        <p style="margin:0;color:var(--ink-soft)">A member of our team will reach out within one business day.</p>
+        <a class="ob-btn ob-btn-light" href="/">Back to home</a>
+      </div>
+      {% else %}
+      <form class="mk-form-card" method="post" action="/contact">
+        {% if error %}<p role="alert" style="margin:0 0 4px;padding:10px 14px;border-radius:8px;font-size:.9rem;color:#b42318;background:#fef3f2;border:1px solid #fecdca">{{ error }}</p>{% endif %}
+        <div class="mk-form-grid">
+          {{ field('Name', name='name', value=request.form.get('name',''), placeholder='Jordan Rivera', required=true) }}
+          {{ field('Work email', name='email', type='email', value=request.form.get('email',''), placeholder='you@company.com', required=true) }}
+          {{ field('Business', name='business', value=request.form.get('business',''), placeholder='Heritage House Painting') }}
+          {{ field('Phone', name='phone', type='tel', value=request.form.get('phone',''), placeholder='(555) 123-4567') }}
+        </div>
+        {{ field('What do you want RingBack to do?', name='message', value=request.form.get('message',''), textarea=true, rows=4, required=true, placeholder='We miss calls during the day and lose the job to whoever picks up first…') }}
+        <button class="ob-btn ob-btn-accent" type="submit" style="width:100%;height:48px;font-size:16px">Talk to sales</button>
+        <p style="margin:0;font-size:.8rem;color:var(--ink-faint);text-align:center">No spam — we’ll only use this to set up your walk-through.</p>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div></section>
+{% endblock %}
+{% block cta %}{% endblock %}

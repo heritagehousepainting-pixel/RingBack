@@ -1,0 +1,14 @@
+{# DataTable — pass column header strings, provide <tr> rows via {% call %}:
+     {% call data_table(['Customer','Phone','Status']) %}
+       <tr class="dt-row"><td>…</td>…</tr>
+     {% endcall %}
+   Cell helpers: class "dt-num" (right + tabular), "dt-strong", "dt-muted".
+   Force a hover preview with class "is-hover" on a <tr>. #}
+{% macro data_table(columns, zebra=False) -%}
+<div class="dt-wrap">
+  <table class="dt{{ ' dt--zebra' if zebra else '' }}">
+    <thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>{{ caller() }}</tbody>
+  </table>
+</div>
+{%- endmacro %}

@@ -1,0 +1,69 @@
+{% extends "marketing_base.html" %}
+{# --- trade icons (Lucide-style, consistent stroke) --- #}
+{% set ic_paint %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 3H5a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/><path d="M19 8v3a2 2 0 0 1-2 2h-5v3"/><rect x="9" y="17" width="6" height="5" rx="1"/></svg>{% endset %}
+{% set ic_hvac %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"/></svg>{% endset %}
+{% set ic_plumb %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>{% endset %}
+{% set ic_roof %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>{% endset %}
+{% set ic_elec %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></svg>{% endset %}
+{% set ic_land %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg>{% endset %}
+{% set ic_gc %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1z"/><path d="M10 10V6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4"/><path d="M4 16v-3a6 6 0 0 1 6-6"/><path d="M14 7a6 6 0 0 1 6 6v3"/></svg>{% endset %}
+{% set ic_tile %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>{% endset %}
+{% set ic_floor %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>{% endset %}
+{% set ic_carpet %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12"/><path d="M4 17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2"/><path d="M8 7h8M8 11h8"/></svg>{% endset %}
+{% set ic_pool %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1C7 13 7 11 9.5 11c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1C7 19 7 17 9.5 17c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg>{% endset %}
+{% set ic_handy %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>{% endset %}
+{% set ic_garage %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V9l9-5 9 5v12"/><path d="M3 21h18"/><path d="M7 21v-7h10v7"/><path d="M7 17h10"/></svg>{% endset %}
+{% set ic_pest %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3l1.5 1.5M16 3l-1.5 1.5"/><path d="M9 7a3 3 0 0 1 6 0"/><rect x="6" y="7" width="12" height="11" rx="6"/><path d="M12 7v11M6 11H2M22 11h-4M6 16l-3 2M18 16l3 2"/></svg>{% endset %}
+{% set ic_clean %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 10.5 8.5 5 10l5.5 1.5L12 17l1.5-5.5L19 10l-5.5-1.5z"/><path d="m19 15-.6 1.9L16.5 18l1.9.6.6 1.9.6-1.9 1.9-.6-1.9-.6z"/></svg>{% endset %}
+{% set ic_tree %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m17 14 3 3.3a1 1 0 0 1-.7 1.7H4.7a1 1 0 0 1-.7-1.7L7 14h-.3a1 1 0 0 1-.7-1.7L9 9h-.2A1 1 0 0 1 8 7.3L12 3l4 4.3a1 1 0 0 1-.8 1.7H15l3 3.3a1 1 0 0 1-.7 1.7z"/><path d="M12 19v3"/></svg>{% endset %}
+{% set ic_fence %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18M3 15h18"/><path d="M6 4v16M12 4v16M18 4v16"/></svg>{% endset %}
+{% set ic_brick %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9.3h18M3 14.6h18"/><path d="M10 4v5.3M16 9.3v5.3M8 14.6V20M14 14.6V20"/></svg>{% endset %}
+{% set ic_window %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 3v18M3 12h18"/></svg>{% endset %}
+{% set ic_gutter %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v11a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4V4"/><path d="M3 4h4M17 4h4"/></svg>{% endset %}
+
+{% set ic_solo %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>{% endset %}
+{% set ic_crew %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>{% endset %}
+
+{% block title %}Solutions{% endblock %}
+{% block content %}
+<header class="mk-head"><div class="mk-wrap">
+  <span class="mk-eyebrow">Solutions</span>
+  <h1 class="mk-h1">Built for the trades<span class="dot">.</span></h1>
+  <p class="mk-lead">Whatever you install, repair, or build — if your business lives off the phone, RingBack makes sure no job slips away while you’re on the tools.</p>
+</div></header>
+
+<section class="mk-section" style="padding-top:clamp(24px,3vw,40px)"><div class="mk-wrap">
+  <div class="mk-section-head center"><span class="mk-kicker">By trade</span><h2 class="mk-h2">Tuned to how your trade talks.</h2></div>
+  <div class="mk-trades">
+    <div class="mk-trade"><span class="mk-ico">{{ ic_paint }}</span><span class="name">Painting</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_gc }}</span><span class="name">General contractors &amp; builders</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_hvac }}</span><span class="name">HVAC</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_plumb }}</span><span class="name">Plumbing</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_elec }}</span><span class="name">Electrical</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_roof }}</span><span class="name">Roofing</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_tile }}</span><span class="name">Tile &amp; stone</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_floor }}</span><span class="name">Flooring</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_carpet }}</span><span class="name">Carpet &amp; upholstery</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_pool }}</span><span class="name">Pool &amp; spa</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_handy }}</span><span class="name">Handyman &amp; maintenance</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_garage }}</span><span class="name">Garage doors</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_pest }}</span><span class="name">Pest control</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_land }}</span><span class="name">Landscaping</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_tree }}</span><span class="name">Tree service</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_fence }}</span><span class="name">Fencing &amp; decks</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_brick }}</span><span class="name">Concrete &amp; masonry</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_window }}</span><span class="name">Windows &amp; doors</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_gutter }}</span><span class="name">Gutters</span></div>
+    <div class="mk-trade"><span class="mk-ico">{{ ic_clean }}</span><span class="name">Cleaning services</span></div>
+  </div>
+  <p style="text-align:center;margin-top:36px;font-size:1.05rem;color:var(--ink-soft)">Don’t see your trade? If your business books work over the phone, RingBack fits. <a href="/contact" style="color:var(--accent-strong);font-weight:600">Talk to us →</a></p>
+</div></section>
+
+<section class="mk-section"><div class="mk-wrap">
+  <div class="mk-section-head center"><span class="mk-kicker">By team size</span><h2 class="mk-h2">From solo to a full crew.</h2></div>
+  <div class="mk-grid mk-grid-2">
+    <div class="mk-card"><div class="mk-ico">{{ ic_solo }}</div><h3>Solo operators</h3><p>You can’t answer from a ladder. RingBack is the front desk you don’t have — every missed call gets a real reply and a booked slot.</p></div>
+    <div class="mk-card"><div class="mk-ico">{{ ic_crew }}</div><h3>Growing crews</h3><p>As call volume climbs, RingBack scales with you — qualifying leads and keeping the schedule full so the whole crew stays billable.</p></div>
+  </div>
+</div></section>
+{% endblock %}

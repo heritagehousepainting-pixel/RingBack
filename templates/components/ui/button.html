@@ -1,0 +1,11 @@
+{# Button — variants: primary | secondary | ghost · sizes: md | sm
+   Renders <a> when href is given, else <button>. Pass icon as raw SVG markup.
+   `extra` is for demo-forced states (is-hover / is-active / is-focus). #}
+{% macro button(label, variant='primary', size='md', href=None, type='button', disabled=False, icon=None, block=False, id=None, extra='') -%}
+{%- set cls = 'btn btn-' ~ variant ~ (' btn-sm' if size == 'sm' else '') ~ (' btn-block' if block else '') ~ ((' ' ~ extra) if extra else '') -%}
+{%- if href -%}
+<a class="{{ cls }}{{ ' is-disabled' if disabled else '' }}"{% if id %} id="{{ id }}"{% endif %} href="{{ href }}"{% if disabled %} aria-disabled="true" tabindex="-1"{% endif %}>{% if icon %}{{ icon|safe }}{% endif %}{{ label }}</a>
+{%- else -%}
+<button class="{{ cls }}"{% if id %} id="{{ id }}"{% endif %} type="{{ type }}"{% if disabled %} disabled{% endif %}>{% if icon %}{{ icon|safe }}{% endif %}{{ label }}</button>
+{%- endif -%}
+{%- endmacro %}

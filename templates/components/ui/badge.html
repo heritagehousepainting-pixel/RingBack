@@ -1,0 +1,5 @@
+{# Badge / StatusPill — filled soft pills.
+   tone: new | booked | urgent | warning | neutral · dot adds a status dot. #}
+{% macro pill(label, tone='neutral', dot=False) -%}
+<span class="pill pill-{{ tone }}">{% if dot %}<span class="pill-dot"></span>{% endif %}{{ label }}</span>
+{%- endmacro %}

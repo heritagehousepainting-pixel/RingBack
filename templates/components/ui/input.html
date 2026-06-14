@@ -1,0 +1,13 @@
+{# Input / Textarea — label + control + help/error.
+   states: default, hover, focus, disabled, error. `state` forces is-* for demos. #}
+{% macro field(label, name='', value='', type='text', placeholder='', help='', error='', disabled=False, textarea=False, rows=4, state='', required=False, autocomplete='', minlength='') -%}
+<div class="field{{ ' has-error' if error else '' }}">
+  {% if label %}<label class="field-label" for="{{ name }}">{{ label }}</label>{% endif %}
+  {%- if textarea -%}
+  <textarea class="field-control{{ (' ' ~ state) if state else '' }}" id="{{ name }}" name="{{ name }}" rows="{{ rows }}" placeholder="{{ placeholder }}"{% if required %} required{% endif %}{% if minlength %} minlength="{{ minlength }}"{% endif %}{% if disabled %} disabled{% endif %}>{{ value }}</textarea>
+  {%- else -%}
+  <input class="field-control{{ (' ' ~ state) if state else '' }}" id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value }}" placeholder="{{ placeholder }}"{% if required %} required{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if minlength %} minlength="{{ minlength }}"{% endif %}{% if disabled %} disabled{% endif %}>
+  {%- endif -%}
+  {% if error %}<span class="field-error">{{ error }}</span>{% elif help %}<span class="field-help">{{ help }}</span>{% endif %}
+</div>
+{%- endmacro %}
