@@ -18,6 +18,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>document.documentElement.classList.add('js')</script>
   <title>RingBack · UI System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -271,10 +272,123 @@
     </div>
   </section>
 
+  <!-- ============================ MOTION · TOKENS ============================ -->
+  <section class="ui-section">
+    <h2>Tokens · Motion</h2>
+    <p class="ui-note">One set of durations and easings drives every animation site-wide — no bespoke timings. Legacy <code>.12s</code> hovers map onto <code>--dur-1</code>. The dots loop each easing so you can feel the difference.</p>
+    <div class="ui-grid ui-grid-2" style="align-items:start">
+      <div>
+        <span class="ui-stack-label" style="display:block;margin-bottom:var(--space-3)">Durations</span>
+        <div class="dur-list">
+          {% for tk, ms, w in [('--dur-instant','80ms','24px'),('--dur-1','120ms','40px'),('--dur-2','200ms','66px'),('--dur-3','320ms','104px'),('--dur-4','520ms','168px')] %}
+          <div class="dur-row"><span class="dur-bar" style="width:{{ w }}"></span><span class="dur-meta">{{ tk }} · {{ ms }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <span class="ui-stack-label" style="display:block;margin-bottom:var(--space-3)">Easings (looping)</span>
+        <div class="ease-list">
+          <div class="ease-row std"><span class="e-meta">--ease-standard · .2,0,0,1</span><span class="ease-track"><span class="ease-dot"></span></span></div>
+          <div class="ease-row ent"><span class="e-meta">--ease-entrance · .16,1,.3,1</span><span class="ease-track"><span class="ease-dot"></span></span></div>
+          <div class="ease-row exit"><span class="e-meta">--ease-exit · .4,0,1,1</span><span class="ease-track"><span class="ease-dot"></span></span></div>
+          <div class="ease-row spring"><span class="e-meta">--ease-spring · .34,1.56,.64,1</span><span class="ease-track"><span class="ease-dot"></span></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= MOTION · INTERACTION PRIMITIVES ======================= -->
+  <section class="ui-section">
+    <h2>Motion · Interaction primitives</h2>
+    <p class="ui-note">The components from above, now alive — click things. Press-scale, loading, validation, hover-lift, accordion, tabs, toast. Enable “Reduce motion” in your OS and reload: it all goes static and nothing breaks.</p>
+    <div class="ui-grid ui-grid-3" style="align-items:start">
+
+      <div class="mo-card">
+        <h4>Button — press &amp; loading</h4>
+        <p>Press for the spring scale; “Save” shows the spinner.</p>
+        <div class="ui-row">{{ button('Save changes') }}<button class="btn btn-primary" type="button" data-loading-demo="Saved">Save</button></div>
+      </div>
+
+      <div class="mo-card">
+        <h4>Pill — pop &amp; pulse</h4>
+        <p>Urgent dot pulses; click to pop a “Saved” pill in.</p>
+        <div class="ui-row" style="gap:var(--space-3)">{{ pill('Urgent','urgent', dot=true) }}<span class="mo-pop-slot" id="pop-slot"></span></div>
+        <div style="margin-top:var(--space-4)"><button class="btn btn-secondary btn-sm" type="button" data-pop-demo="#pop-slot">Mark saved</button></div>
+      </div>
+
+      <div class="mo-card">
+        <h4>Field — focus &amp; error</h4>
+        <p>Focus for the ring; “Validate” triggers the shake.</p>
+        <div id="shake-field" class="field">
+          <label class="field-label" for="d-phone">Customer phone</label>
+          <input class="field-control" id="d-phone" value="555314">
+          <span class="field-error">Enter a 10-digit number.</span>
+        </div>
+        <div style="margin-top:var(--space-3)"><button class="btn btn-secondary btn-sm" type="button" data-shake-demo="#shake-field">Validate</button></div>
+      </div>
+
+      <div class="mo-card">
+        <h4>Card — hover lift</h4>
+        <p>Hover the inner card.</p>
+        <div class="card card-hover" style="padding:var(--space-4)"><span style="font-size:var(--text-sm);color:var(--ink-soft)">Lifts on hover with shadow-pop.</span></div>
+      </div>
+
+      <div class="mo-card">
+        <h4>Link — underline grow</h4>
+        <p>Hover the link.</p>
+        <a class="link-underline" href="#" onclick="return false">See the live demo</a>
+      </div>
+
+      <div class="mo-card">
+        <h4>Segmented — sliding indicator</h4>
+        <p>Click between options.</p>
+        <div class="seg"><span class="seg-ind"></span><button class="seg-btn active" type="button">Monthly</button><button class="seg-btn" type="button">Yearly</button></div>
+      </div>
+
+      <div class="mo-card">
+        <h4>Toast</h4>
+        <p>Slides up, auto-dismisses.</p>
+        <button class="btn btn-secondary btn-sm" type="button" data-toast-demo="Estimate booked">Show toast</button>
+      </div>
+
+      <div class="mo-card" style="grid-column:span 2">
+        <h4>Accordion — smooth height</h4>
+        <p>Click to expand; height animates via grid-rows.</p>
+        <div class="acc">
+          <button class="acc-summary" type="button" aria-expanded="false">How fast is setup?</button>
+          <div class="acc-panel"><div class="acc-inner"><div class="acc-body">Most crews are live within a day — we train the AI on your services, pricing, and hours, then you forward your missed calls.</div></div></div>
+        </div>
+        <div class="acc">
+          <button class="acc-summary" type="button" aria-expanded="false">Do I keep my number?</button>
+          <div class="acc-panel"><div class="acc-inner"><div class="acc-body">Yes. RingBack works with your existing number — missed calls forward to the AI, everything else rings as normal.</div></div></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= MOTION · REVEAL & COUNT-UP ======================= -->
+  <section class="ui-section">
+    <h2>Motion · Scroll reveal &amp; count-up</h2>
+    <p class="ui-note">Scrolling this into view counts the stats up and rises the cards in with a staggered cadence — the reveal every marketing section will share. <code>html.js</code>-gated, so content is never hidden if JS is off.</p>
+    <div class="stat-row" style="margin-bottom:var(--space-6)">
+      <div class="stat-tile"><div class="stat-value"><span data-countup="128">0</span></div><div class="stat-label">Leads captured</div></div>
+      <div class="stat-tile"><div class="stat-value"><span data-countup="86">0</span></div><div class="stat-label">Estimates booked</div></div>
+      <div class="stat-tile"><div class="stat-value"><span data-countup="4.2" data-countup-decimals="1" data-countup-suffix="s">0</span></div><div class="stat-label">Avg. text-back</div></div>
+      <div class="stat-tile"><div class="stat-value"><span data-countup="98" data-countup-suffix="%">0</span></div><div class="stat-label">Answered in time</div></div>
+    </div>
+    <div class="ui-grid ui-grid-3" data-reveal-group style="align-items:start">
+      <div class="card reveal" data-reveal="up" style="padding:var(--space-6)"><h4 style="margin:0 0 var(--space-2);font-size:var(--text-md);font-weight:600">Texts back in seconds</h4><p style="margin:0;color:var(--ink-soft);font-size:var(--text-sm);line-height:1.6">Answers instantly, in your voice — before they call the next painter.</p></div>
+      <div class="card reveal" data-reveal="up" style="padding:var(--space-6)"><h4 style="margin:0 0 var(--space-2);font-size:var(--text-md);font-weight:600">Books the estimate</h4><p style="margin:0;color:var(--ink-soft);font-size:var(--text-sm);line-height:1.6">Qualifies the job and schedules it while you're up on the ladder.</p></div>
+      <div class="card reveal" data-reveal="up" style="padding:var(--space-6)"><h4 style="margin:0 0 var(--space-2);font-size:var(--text-md);font-weight:600">Flags urgent jobs</h4><p style="margin:0;color:var(--ink-soft);font-size:var(--text-sm);line-height:1.6">Flooding, no heat, no AC — you're notified the second it can't wait.</p></div>
+    </div>
+  </section>
+
   <footer class="ui-foot">
-    RingBack design system · tokens in <code>static/ui.css</code> · components in <code>templates/components/ui/</code> · this gallery at <code>/ui</code>
+    RingBack design system · tokens in <code>static/ui.css</code> · components in <code>templates/components/ui/</code> · motion in <code>static/motion.js</code> · this gallery at <code>/ui</code>
   </footer>
 
 </main>
+<script src="/static/motion.js"></script>
 </body>
 </html>

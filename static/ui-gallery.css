@@ -77,3 +77,27 @@ footer.ui-foot{padding:var(--space-8) 0;border-top:1px solid var(--border);
 @media(max-width:760px){
   .ui-grid-2,.ui-grid-3{grid-template-columns:1fr}
 }
+
+/* ---- Motion demo chrome (NOT part of the system; /ui only) ---- */
+.dur-list{display:flex;flex-direction:column;gap:var(--space-2)}
+.dur-row{display:flex;align-items:center;gap:var(--space-3)}
+.dur-bar{height:14px;background:var(--accent);border-radius:2px;flex:0 0 auto}
+.dur-meta{font-size:var(--text-xs);color:var(--ink-faint);font-family:ui-monospace,Menlo,monospace}
+
+.ease-list{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-2)}
+.ease-row{display:flex;align-items:center;gap:var(--space-4)}
+.ease-row .e-meta{flex:0 0 230px;font-size:var(--text-xs);color:var(--ink-faint);font-family:ui-monospace,Menlo,monospace}
+.ease-track{position:relative;flex:1;height:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-pill)}
+.ease-dot{position:absolute;top:0;left:0;width:8px;height:8px;border-radius:50%;background:var(--accent);
+  animation:mo-travel 1.8s infinite alternate}
+.ease-row.std .ease-dot{animation-timing-function:cubic-bezier(.2,0,0,1)}
+.ease-row.ent .ease-dot{animation-timing-function:cubic-bezier(.16,1,.3,1)}
+.ease-row.exit .ease-dot{animation-timing-function:cubic-bezier(.4,0,1,1)}
+.ease-row.spring .ease-dot{animation-timing-function:cubic-bezier(.34,1.56,.64,1)}
+@keyframes mo-travel{from{left:0}to{left:calc(100% - 8px)}}
+
+.mo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow-card);padding:var(--space-6)}
+.mo-card h4{margin:0 0 var(--space-1);font-size:var(--text-sm);font-weight:600;color:var(--ink)}
+.mo-card p{margin:0 0 var(--space-4);font-size:var(--text-xs);color:var(--ink-faint)}
+.mo-pop-slot{display:inline-flex;min-height:20px;align-items:center}

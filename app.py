@@ -24,6 +24,7 @@ import mail
 import alerts
 import reminders
 import compliance
+import triage
 from config import (APP_NAME, TAGLINE, DEBUG, SECRET_KEY, TASKS_SECRET,
                     SESSION_COOKIE_SECURE, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD,
                     app_tz, VOICE_PUBLIC_URL)
@@ -351,13 +352,23 @@ def dashboard():
     }
     return render_template("dashboard.html", leads=leads, appointments=appts, stats=stats,
                            alert_feed=db.recent_alerts(biz["id"], 8),
-                           reminder_state=db.reminders_by_appointment(biz["id"]))
+                           reminder_state=db.reminders_by_appointment(biz["id"]),
+                           screened=db.recent_screened_calls(biz["id"], 8),
+                           review_count=db.count_pending_suggestions(biz["id"]))
 
 
 @app.route("/analytics")
 @login_required
 def analytics_page():
     return render_template("analytics.html")
+
+
+@app.route("/callers")
+@login_required
+def callers_page():
+    """The caller-triage inbox: review RingBack's suggestions (To review / Sorted /
+    Dismissed) and manage the screened-numbers directory. JS-driven via /api/*."""
+    return render_template("callers.html")
 
 
 @app.route("/api/analytics")
@@ -571,6 +582,10 @@ def handle_inbound(biz, lead, body):
         # (day, time) is already taken by THIS business, so only claim a real win.
         elif db.book_appointment(biz["id"], lead_id, booking):
             booked = booking
+            # A caller who books is a real customer: remember the number so a future
+            # call from them is engaged, not mistaken for a cold lead (never
+            # overrides an owner-set personal/vendor/blocked tag).
+            db.learn_customer(biz["id"], lead.get("phone"), lead.get("name"))
             # Reschedule: now that the new slot is held, release the lead's old
             # estimate(s) so a re-book never double-books or orphans a slot.
             for a in prior:
@@ -729,6 +744,162 @@ def api_cancel_appointment(appt_id):
     return jsonify(ok=True, when=when)
 
 
+# ---- Caller triage: the owner's contact directory + screened-call override ----
+@app.route("/api/contacts")
+@login_required
+def api_contacts():
+    """The owner-managed screening directory (personal/vendor/blocked) + a count of
+    auto-recognized customers. Powers the Settings 'Caller screening' card."""
+    rows = db.list_contacts(current_business()["id"])
+    managed = [r for r in rows if r["category"] in ("personal", "vendor", "blocked")]
+    customers = sum(1 for r in rows if r["category"] == "customer")
+    return jsonify(managed=managed, customers=customers)
+
+
+@app.route("/api/contacts", methods=["POST"])
+@login_required
+def api_contacts_add():
+    """Tag a number so RingBack never cold-texts it. Only the owner-set categories
+    are accepted (customer/prospect are learned automatically, never set by hand)."""
+    data, err = _get_json("number", "category")
+    if err:
+        return err
+    if data["category"] not in ("personal", "vendor", "blocked"):
+        return jsonify(error="Choose personal, vendor, or blocked."), 400
+    if len(re.sub(r"\D", "", str(data["number"]))) < 7:
+        return jsonify(error="Enter a valid phone number."), 400
+    db.set_contact(current_business()["id"], data["number"], data["category"],
+                   name=(data.get("name") or "").strip() or None)
+    return jsonify(ok=True)
+
+
+@app.route("/api/contacts/delete", methods=["POST"])
+@login_required
+def api_contacts_delete():
+    data, err = _get_json("number")
+    if err:
+        return err
+    db.delete_contact(current_business()["id"], data["number"])
+    return jsonify(ok=True)
+
+
+@app.route("/api/calls/<int:call_id>/engage", methods=["POST"])
+@login_required
+def api_engage_screened_call(call_id):
+    """Owner override from the dashboard: a screened caller was actually worth
+    reaching. Forget the screen tag, then engage exactly like a fresh missed call
+    (open the conversation + send the text-back). Refuses an opted-out number, so the
+    override can never re-text someone who replied STOP."""
+    biz = current_business()
+    call = db.get_call(call_id, biz["id"])  # tenant-scoped
+    if not call:
+        return jsonify(error="Call not found."), 404
+    caller = (call.get("from_number") or "").strip()
+    if not caller:
+        return jsonify(error="No caller number on file."), 400
+    if db.is_suppressed(biz["id"], caller):
+        return jsonify(error="This caller opted out, so we can’t text them."), 400
+    db.delete_contact(biz["id"], caller)  # no longer a screened non-prospect
+    lead = (db.get_lead_by_phone(biz["id"], caller)
+            or db.get_lead(db.create_lead(biz["id"], "New Caller", caller)))
+    if not db.get_messages(lead["id"]):
+        reply = open_conversation(biz, lead)    # records the thread + alerts the owner
+        messaging.send_sms(biz, caller, reply)  # transmit (already recorded)
+    db.mark_call_engaged(call_id, lead["id"])
+    return jsonify(ok=True, lead_id=lead["id"])
+
+
+# ---- Caller triage: the suggestion / "for review" queue ----
+@app.route("/api/suggestions")
+@login_required
+def api_suggestions():
+    """One tab of the Callers review inbox (status = pending | accepted | dismissed),
+    plus the counts for all three tabs. Read-only; suggestions are generated off the
+    hot path (the ticker)."""
+    bid = current_business()["id"]
+    status = request.args.get("status", "pending")
+    if status not in ("pending", "accepted", "dismissed"):
+        status = "pending"
+    counts = {s: db.count_suggestions(bid, s) for s in ("pending", "accepted", "dismissed")}
+    return jsonify(suggestions=db.list_suggestions(bid, status), counts=counts, status=status)
+
+
+@app.route("/api/suggestions/<int:sug_id>/accept", methods=["POST"])
+@login_required
+def api_suggestion_accept(sug_id):
+    """Confirm a suggestion (optionally recategorized): write it to the directory and
+    mark the suggestion accepted. The owner is always the one who decides."""
+    biz = current_business()
+    sug = db.get_suggestion(sug_id, biz["id"])
+    if not sug:
+        return jsonify(error="Suggestion not found."), 404
+    data = request.get_json(silent=True) or {}
+    category = data.get("category") or sug["suggested_category"]
+    if category not in ("personal", "vendor", "blocked", "customer"):
+        return jsonify(error="Invalid category."), 400
+    db.set_contact(biz["id"], sug["number"], category, name=sug.get("name"), source="suggested")
+    db.set_suggestion_status(sug_id, "accepted")
+    return jsonify(ok=True, category=category)
+
+
+@app.route("/api/suggestions/<int:sug_id>/dismiss", methods=["POST"])
+@login_required
+def api_suggestion_dismiss(sug_id):
+    """Dismiss a suggestion -- it won't be raised again for this number."""
+    biz = current_business()
+    if not db.get_suggestion(sug_id, biz["id"]):
+        return jsonify(error="Suggestion not found."), 404
+    db.set_suggestion_status(sug_id, "dismissed")
+    return jsonify(ok=True)
+
+
+@app.route("/api/suggestions/<int:sug_id>/reopen", methods=["POST"])
+@login_required
+def api_suggestion_reopen(sug_id):
+    """Undo: move a sorted/dismissed suggestion back to 'to review'. If it had been
+    accepted, the directory entry that accept created is reverted too."""
+    biz = current_business()
+    sug = db.get_suggestion(sug_id, biz["id"])
+    if not sug:
+        return jsonify(error="Suggestion not found."), 404
+    if sug["status"] == "accepted":
+        db.delete_contact(biz["id"], sug["number"])
+    db.set_suggestion_status(sug_id, "pending")
+    return jsonify(ok=True)
+
+
+@app.route("/api/suggestions/bulk", methods=["POST"])
+@login_required
+def api_suggestions_bulk():
+    """Apply one action (accept | dismiss | reopen) to many suggestions at once -- the
+    bulk-select path that makes an imported address book tractable."""
+    biz = current_business()
+    data, err = _get_json("ids", "action")
+    if err:
+        return err
+    action = data["action"]
+    if action not in ("accept", "dismiss", "reopen"):
+        return jsonify(error="Invalid action."), 400
+    ids = data["ids"] if isinstance(data["ids"], list) else []
+    done = 0
+    for sid in ids:
+        sug = db.get_suggestion(sid, biz["id"]) if isinstance(sid, int) else None
+        if not sug:
+            continue
+        if action == "accept":
+            db.set_contact(biz["id"], sug["number"], sug["suggested_category"],
+                           name=sug.get("name"), source="suggested")
+            db.set_suggestion_status(sid, "accepted")
+        elif action == "dismiss":
+            db.set_suggestion_status(sid, "dismissed")
+        else:  # reopen
+            if sug["status"] == "accepted":
+                db.delete_contact(biz["id"], sug["number"])
+            db.set_suggestion_status(sid, "pending")
+        done += 1
+    return jsonify(ok=True, count=done)
+
+
 def _cancel_estimate_for(biz, caller):
     """Cancel a caller's booked estimate(s) by phone (frees the slot, cancels
     reminders, alerts the owner). Returns True if anything was canceled, so the SMS
@@ -785,19 +956,32 @@ def _public_base():
 
 
 def _missed_call_textback(biz, caller, call_sid="", dial_status=""):
-    """Shared missed-call handling: find or create the caller's lead, log the call,
-    and (only when the thread is empty) generate + send the instant text-back."""
+    """Shared missed-call handling: triage the caller, then (if they're worth
+    engaging) find or create their lead, log the call, and -- only when the thread
+    is empty -- generate + send the instant text-back. Returns True if we engaged,
+    False if the caller was screened out (so the voice prompt stays honest about
+    whether a text actually went out)."""
+    # Triage FIRST: a known non-prospect (the owner's mom, the power company, a
+    # blocked number) or an opted-out caller is logged but never cold-pitched. An
+    # unknown caller is treated as a potential customer and engaged.
+    verdict = triage.screen_caller(biz["id"], caller)
+    if not verdict["engage"]:
+        db.log_call(biz["id"], call_sid, from_number=caller,
+                    to_number=biz.get("twilio_number") or "", dial_status=dial_status,
+                    missed=1, category=verdict["category"], engaged=0)
+        return False
     lead = db.get_lead_by_phone(biz["id"], caller)
     if not lead:
         lead = db.get_lead(db.create_lead(biz["id"], "New Caller", caller))
     db.log_call(biz["id"], call_sid, from_number=caller,
                 to_number=biz.get("twilio_number") or "", dial_status=dial_status,
-                missed=1, lead_id=lead["id"])
+                missed=1, lead_id=lead["id"], category=verdict["category"], engaged=1)
     # Greet only an empty thread, so a repeat missed call mid-conversation does not
     # re-introduce us (the owner is still alerted via the 'lead' alert + call log).
     if not db.get_messages(lead["id"]):
         reply = open_conversation(biz, lead)    # records the thread + alerts the owner
         messaging.send_sms(biz, caller, reply)  # transmit (already recorded)
+    return True
 
 
 @app.route("/webhooks/twilio/voice/inbound", methods=["POST"])
@@ -814,10 +998,12 @@ def twilio_voice_inbound():
         return _twiml(
             f'<Response><Dial answerOnBridge="true" timeout="18" action="{action}" '
             f'method="POST"><Number>{_xesc(forward)}</Number></Dial></Response>')
-    _missed_call_textback(biz, request.form.get("From", ""),
-                          request.form.get("CallSid", ""), "no-forward")
-    return _twiml("<Response><Say>Sorry we missed you. We just sent you a text "
-                  "message. Goodbye.</Say><Hangup/></Response>")
+    engaged = _missed_call_textback(biz, request.form.get("From", ""),
+                                    request.form.get("CallSid", ""), "no-forward")
+    if engaged:
+        return _twiml("<Response><Say>Sorry we missed you. We just sent you a text "
+                      "message. Goodbye.</Say><Hangup/></Response>")
+    return _twiml("<Response><Hangup/></Response>")
 
 
 @app.route("/webhooks/twilio/voice/dial-status", methods=["POST"])
@@ -828,10 +1014,11 @@ def twilio_voice_dial_status():
     biz = db.get_business_by_twilio_number(request.form.get("To", ""))
     status = (request.form.get("DialCallStatus") or "").lower()
     if biz and status in _MISSED_DIAL:
-        _missed_call_textback(biz, request.form.get("From", ""),
-                              request.form.get("CallSid", ""), status)
-        return _twiml("<Response><Say>Sorry we missed you. We just sent you a text "
-                      "message. Goodbye.</Say><Hangup/></Response>")
+        engaged = _missed_call_textback(biz, request.form.get("From", ""),
+                                        request.form.get("CallSid", ""), status)
+        if engaged:
+            return _twiml("<Response><Say>Sorry we missed you. We just sent you a text "
+                          "message. Goodbye.</Say><Hangup/></Response>")
     return _twiml("<Response><Hangup/></Response>")
 
 
@@ -869,8 +1056,10 @@ def twilio_sms_inbound():
         return _twiml(f"<Response><Message>{_xesc(biz.get('name') or 'RingBack')}: "
                       "reply here about your free estimate. Reply STOP to "
                       "unsubscribe.</Message></Response>")
-    if db.is_suppressed(biz["id"], caller) or not body:
-        return _twiml("<Response/>")   # opted out, or nothing to act on -> stay silent
+    contact = db.get_contact(biz["id"], caller)
+    if (contact and contact.get("category") == "blocked") or \
+            db.is_suppressed(biz["id"], caller) or not body:
+        return _twiml("<Response/>")   # blocked, opted out, or nothing to act on -> silent
     lead = db.get_lead_by_phone(biz["id"], caller)
     if not lead:
         lead = db.get_lead(db.create_lead(biz["id"], "New Caller", caller))

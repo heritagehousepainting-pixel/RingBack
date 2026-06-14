@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>document.documentElement.classList.add('js')</script>
   <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +12,7 @@
   <link rel="stylesheet" href="/static/onboarding.css">
   <link rel="stylesheet" href="/static/marketing.css">
 </head>
-<body class="mk">
+<body class="mk" data-surface="marketing">
 {% set p = request.path %}
 <header class="ob-nav mk-nav">
   <a class="ob-logo" href="/">
@@ -93,5 +94,6 @@
   </div>
 </footer>
 <script src="/static/app.js"></script>
+<script src="/static/motion.js"></script>
 </body>
 </html>

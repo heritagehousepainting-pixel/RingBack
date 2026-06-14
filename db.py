@@ -100,6 +100,20 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_sched_due
             ON scheduled_messages(status, send_at);
+        CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL, number TEXT NOT NULL,
+            name TEXT, category TEXT DEFAULT 'prospect', note TEXT, source TEXT,
+            created_at TEXT, updated_at TEXT,
+            UNIQUE(business_id, number)
+        );
+        CREATE TABLE IF NOT EXISTS contact_suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id INTEGER NOT NULL, number TEXT NOT NULL,
+            name TEXT, suggested_category TEXT, reason TEXT, source TEXT,
+            status TEXT DEFAULT 'pending', created_at TEXT, updated_at TEXT,
+            UNIQUE(business_id, number)
+        );
         """
     )
     # Migration: add `urgent` to older databases that predate the column.
@@ -208,6 +222,12 @@ def init_db():
     for col in ("provider_sid", "delivery_status"):
         if col not in msg_cols:
             c.execute(f"ALTER TABLE messages ADD COLUMN {col} TEXT")
+    # calls gain the triage outcome (Caller triage v1): which directory category the
+    # caller matched and whether we engaged (texted back) or screened them out.
+    call_cols = [r[1] for r in c.execute("PRAGMA table_info(calls)").fetchall()]
+    for col, ddl in (("category", "TEXT"), ("engaged", "INTEGER")):
+        if col not in call_cols:
+            c.execute(f"ALTER TABLE calls ADD COLUMN {col} {ddl}")
 
     # businesses gain owner-alert preferences (Feature 2: alert the owner when a
     # lead arrives / an estimate books / a lead is flagged urgent). These ARE set
@@ -773,21 +793,61 @@ def set_google_tokens(business_id, access_token, refresh_token, token_expiry,
 
 # ---- Callback system: inbound call log + consent/suppression ----
 def log_call(business_id, call_sid, from_number="", to_number="", dial_status="",
-             answered_by="", missed=0, lead_id=None):
+             answered_by="", missed=0, lead_id=None, category=None, engaged=None):
     """Record (or update) an inbound call. Idempotent on call_sid because Twilio
     retries webhooks and fires several events per call; later events update the
-    outcome fields rather than inserting duplicates."""
+    outcome fields rather than inserting duplicates. `category`/`engaged` carry the
+    triage verdict (COALESCEd so a later event never nulls them)."""
     conn = get_conn()
     conn.execute(
         "INSERT INTO calls (business_id, lead_id, call_sid, from_number, to_number,"
-        " dial_status, answered_by, missed, created_at) VALUES (?,?,?,?,?,?,?,?,?) "
+        " dial_status, answered_by, missed, category, engaged, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(call_sid) DO UPDATE SET "
         "  dial_status=excluded.dial_status, answered_by=excluded.answered_by, "
-        "  missed=excluded.missed, lead_id=COALESCE(excluded.lead_id, calls.lead_id)",
+        "  missed=excluded.missed, lead_id=COALESCE(excluded.lead_id, calls.lead_id), "
+        "  category=COALESCE(excluded.category, calls.category), "
+        "  engaged=COALESCE(excluded.engaged, calls.engaged)",
         (business_id, lead_id, call_sid, from_number, to_number, dial_status,
-         answered_by, 1 if missed else 0, now_iso()))
+         answered_by, 1 if missed else 0, category,
+         None if engaged is None else (1 if engaged else 0), now_iso()))
     conn.commit()
     conn.close()
+
+
+def get_call(call_id, business_id):
+    """A single call row, scoped to the business (so cross-tenant ids are rejected)."""
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM calls WHERE id=? AND business_id=?",
+                       (call_id, business_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def mark_call_engaged(call_id, lead_id=None):
+    """Flip a previously-screened call to engaged (the owner's dashboard override)."""
+    conn = get_conn()
+    conn.execute("UPDATE calls SET engaged=1, lead_id=COALESCE(?, lead_id) WHERE id=?",
+                 (lead_id, call_id))
+    conn.commit()
+    conn.close()
+
+
+def recent_screened_calls(business_id, limit=8):
+    """Recent missed callers we screened OUT for being non-prospects (the owner's
+    directory: personal/vendor/blocked), grouped to the most recent call per number,
+    for the dashboard 'Screened calls' strip + one-tap override. Opt-outs are
+    intentionally excluded -- re-texting a STOP is never offered."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT id, from_number, category, MAX(created_at) AS created_at, "
+        "COUNT(*) AS times FROM calls "
+        "WHERE business_id=? AND engaged=0 AND category IN ('personal','vendor','blocked') "
+        "AND from_number IS NOT NULL AND from_number<>'' "
+        "GROUP BY from_number ORDER BY created_at DESC LIMIT ?",
+        (business_id, limit)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def set_voice_consent(business_id, number, ok=True):
@@ -835,6 +895,190 @@ def set_opt_out(business_id, number, source="reply"):
         "  opted_out=1, opted_out_at=excluded.opted_out_at, source=excluded.source, "
         "  updated_at=excluded.updated_at",
         (business_id, key, now_iso(), source, now_iso()))
+    conn.commit()
+    conn.close()
+
+
+# ---- Caller triage: the per-business contact directory ----
+# Who a number IS to this business, so we never cold-pitch a non-prospect (the
+# owner's mom, the power company, a known nuisance). Keyed by the last 10 digits,
+# like the consent ledger, so +1 / formatting never matters.
+CONTACT_CATEGORIES = ("prospect", "customer", "personal", "vendor", "blocked")
+
+
+def _digits10(number):
+    return re.sub(r"\D", "", str(number or ""))[-10:]
+
+
+def get_contact(business_id, number):
+    """The directory entry for a (business, number), or None if we have not
+    classified this caller."""
+    key = _digits10(number)
+    if not key:
+        return None
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM contacts WHERE business_id=? AND number=?",
+                       (business_id, key)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_contact(business_id, number, category, name=None, note=None, source="owner"):
+    """Upsert a directory entry (the owner tagging a number, or an auto-learn).
+    `category` is the source of truth for engage-vs-screen; an unknown category
+    falls back to 'prospect'. name/note are preserved when passed None on update."""
+    key = _digits10(number)
+    if not key:
+        return None
+    if category not in CONTACT_CATEGORIES:
+        category = "prospect"
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO contacts (business_id, number, name, category, note, source, "
+        "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(business_id, number) DO UPDATE SET "
+        "  category=excluded.category, "
+        "  name=COALESCE(excluded.name, contacts.name), "
+        "  note=COALESCE(excluded.note, contacts.note), "
+        "  source=excluded.source, updated_at=excluded.updated_at",
+        (business_id, key, name, category, note, source, now_iso(), now_iso()))
+    conn.commit()
+    conn.close()
+    return key
+
+
+def list_contacts(business_id):
+    """All directory entries for a business (non-prospects first), for the Settings
+    'Caller screening' card."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM contacts WHERE business_id=? ORDER BY "
+        "CASE category WHEN 'blocked' THEN 0 WHEN 'vendor' THEN 1 WHEN 'personal' "
+        "THEN 2 WHEN 'customer' THEN 3 ELSE 4 END, id DESC", (business_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_contact(business_id, number):
+    """Forget a directory entry (the number reverts to an unscreened prospect)."""
+    conn = get_conn()
+    conn.execute("DELETE FROM contacts WHERE business_id=? AND number=?",
+                 (business_id, _digits10(number)))
+    conn.commit()
+    conn.close()
+
+
+def learn_customer(business_id, number, name=None):
+    """Auto-mark a number as a known customer after they book, so a future call from
+    them is never mistaken for a cold lead. NEVER overrides an owner-set
+    personal/vendor/blocked tag -- that intent wins."""
+    key = _digits10(number)
+    if not key:
+        return
+    existing = get_contact(business_id, number)
+    if existing and existing.get("category") in NON_PROSPECT_CATEGORIES:
+        return
+    set_contact(business_id, number, "customer", name=name, source="auto-booking")
+
+
+# Mirror of triage.NON_PROSPECT, kept here to avoid a db->triage import cycle.
+NON_PROSPECT_CATEGORIES = ("personal", "vendor", "blocked")
+
+
+# ---- Caller triage: the suggestion / "for review" queue (QuickBooks-style) ----
+# RingBack observes a caller and PROPOSES a category; the owner confirms with one
+# tap, recategorizes, or dismisses. Suggestions never auto-apply.
+def caller_signals(business_id):
+    """Per-caller-number behavioral aggregates that drive suggestions: how many
+    times they were a missed call, how many texts they sent back, and how many
+    estimates they booked. Keyed by the last 10 digits so formatting never matters."""
+    conn = get_conn()
+    calls = conn.execute("SELECT from_number, missed FROM calls WHERE business_id=?",
+                         (business_id,)).fetchall()
+    leads = conn.execute("SELECT id, phone, name FROM leads WHERE business_id=?",
+                         (business_id,)).fetchall()
+    inbound = dict(conn.execute(
+        "SELECT m.lead_id, COUNT(*) FROM messages m JOIN leads l ON l.id=m.lead_id "
+        "WHERE l.business_id=? AND m.direction='in' GROUP BY m.lead_id", (business_id,)).fetchall())
+    booked = dict(conn.execute(
+        "SELECT lead_id, COUNT(*) FROM appointments WHERE business_id=? AND status='booked' "
+        "GROUP BY lead_id", (business_id,)).fetchall())
+    conn.close()
+    stats = {}
+
+    def slot(k):
+        return stats.setdefault(k, {"number": k, "name": "", "missed_calls": 0,
+                                    "inbound_msgs": 0, "booked": 0})
+    for r in calls:
+        k = _digits10(r["from_number"])
+        if k and r["missed"]:
+            slot(k)["missed_calls"] += 1
+    for l in leads:
+        k = _digits10(l["phone"])
+        if not k:
+            continue
+        s = slot(k)
+        if l["name"] and not s["name"]:
+            s["name"] = l["name"]
+        s["inbound_msgs"] += inbound.get(l["id"], 0)
+        s["booked"] += booked.get(l["id"], 0)
+    return list(stats.values())
+
+
+def upsert_suggestion(business_id, number, name, category, reason, source="behavior"):
+    """Record (or refresh) a pending suggestion for a number. A suggestion the owner
+    already accepted or dismissed is left untouched (the WHERE on the upsert), so we
+    never nag about a number they've already decided."""
+    key = _digits10(number)
+    if not key:
+        return
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO contact_suggestions (business_id, number, name, suggested_category, "
+        "reason, source, status, created_at, updated_at) VALUES (?,?,?,?,?,?, 'pending', ?, ?) "
+        "ON CONFLICT(business_id, number) DO UPDATE SET "
+        "  name=COALESCE(excluded.name, contact_suggestions.name), "
+        "  suggested_category=excluded.suggested_category, reason=excluded.reason, "
+        "  source=excluded.source, updated_at=excluded.updated_at "
+        "WHERE contact_suggestions.status='pending'",
+        (business_id, key, name, category, reason, source, now_iso(), now_iso()))
+    conn.commit()
+    conn.close()
+
+
+def list_suggestions(business_id, status="pending"):
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM contact_suggestions WHERE business_id=? AND status=? ORDER BY id DESC",
+        (business_id, status)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_pending_suggestions(business_id):
+    return count_suggestions(business_id, "pending")
+
+
+def count_suggestions(business_id, status="pending"):
+    conn = get_conn()
+    n = conn.execute("SELECT COUNT(*) FROM contact_suggestions WHERE business_id=? AND status=?",
+                     (business_id, status)).fetchone()[0]
+    conn.close()
+    return n
+
+
+def get_suggestion(sug_id, business_id):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM contact_suggestions WHERE id=? AND business_id=?",
+                       (sug_id, business_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_suggestion_status(sug_id, status):
+    conn = get_conn()
+    conn.execute("UPDATE contact_suggestions SET status=?, updated_at=? WHERE id=?",
+                 (status, now_iso(), sug_id))
     conn.commit()
     conn.close()
 
