@@ -37,6 +37,15 @@ def init_db():
     # ("No open HTTP ports detected"). The voice service relays over HTTP
     # (/internal/voice/turn) and never opens this file directly, so a single-writer
     # rollback journal is correct here and safe on a network filesystem.
+    #
+    # But the persisted /var/data file was created in WAL by older deploys, and
+    # *converting* WAL->DELETE forces SQLite to open the existing WAL db, which engages
+    # the -shm file on the network disk -- the exact thing that hangs. Setting
+    # EXCLUSIVE locking first keeps the WAL index in heap memory (no -shm file), so the
+    # one-time conversion runs safely on a network FS. This connection closes at the end
+    # of init_db, releasing the exclusive lock; every later get_conn() opens the now
+    # DELETE-mode file with normal shared locking. (No-op on a fresh/already-DELETE db.)
+    c.execute("PRAGMA locking_mode=EXCLUSIVE")
     c.execute("PRAGMA journal_mode=DELETE")
     c.executescript(
         """
