@@ -26,6 +26,14 @@
   {{ stat_tile(urgent_count, 'Urgent', sub=('Needs follow-up' if urgent_count else 'All clear'), sub_tone=('bad' if urgent_count else 'good')) }}
 {% endcall %}
 
+{% if review_count and review_count > 0 %}
+<a class="review-nudge" href="/callers">
+  <span class="review-nudge-badge">{{ review_count }}</span>
+  <span class="review-nudge-text">{{ review_count }} caller{{ 's' if review_count != 1 else '' }} to review — RingBack suggested how to sort {{ 'them' if review_count != 1 else 'it' }}.</span>
+  <span class="review-nudge-cta">Review callers →</span>
+</a>
+{% endif %}
+
 <div class="dash-2col">
   {% call card(title='Leads', flush=true) %}
     {% if leads %}
@@ -71,6 +79,25 @@
     {{ empty_state('No estimates booked yet', 'Estimates your AI books during a conversation show up here, ready for your calendar.') }}
   {% endif %}
 {% endcall %}
+
+{% if screened %}
+{% call card(title='Screened calls', subtitle='Callers RingBack didn’t text back because you marked them as non-prospects. Was one actually a customer? Text them back.', flush=true) %}
+  {% call data_table(['Caller','Why','When','']) %}
+    {% for c in screened %}
+    <tr>
+      <td class="dt-strong">{{ c.from_number|phone }}{% if c.times and c.times > 1 %} <span class="dt-muted">· {{ c.times }} calls</span>{% endif %}</td>
+      <td>
+        {% if c.category == 'blocked' %}{{ pill('Blocked','urgent') }}
+        {% elif c.category == 'vendor' %}{{ pill('Vendor','warning') }}
+        {% else %}{{ pill('Personal','neutral') }}{% endif %}
+      </td>
+      <td class="dt-muted">{{ c.created_at|nicedate }}</td>
+      <td class="dt-actions"><button type="button" class="btn btn-ghost btn-sm screen-engage" data-id="{{ c.id }}" data-num="{{ c.from_number|phone }}" aria-label="Text back {{ c.from_number|phone }}">Text them back</button></td>
+    </tr>
+    {% endfor %}
+  {% endcall %}
+{% endcall %}
+{% endif %}
 
 {% call card(title='Recent alerts', flush=true) %}
   {% if alert_feed %}

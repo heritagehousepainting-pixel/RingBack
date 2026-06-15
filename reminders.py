@@ -236,8 +236,14 @@ def scan_followups(now=None):
 
 
 def tick_once(now=None):
-    """One scheduler pass: queue follow-ups, then send everything due."""
+    """One scheduler pass: refresh caller-triage suggestions, queue follow-ups, then
+    send everything due."""
     now = now or db.now_iso()
+    try:
+        import triage
+        triage.scan_all_suggestions()  # observe callers -> refresh the review queue
+    except Exception as e:
+        print(f"[ringback] suggestion scan failed: {e}", file=sys.stderr, flush=True)
     queued = scan_followups(now)
     sent = run_due_once(now)
     return {"queued": queued, "sent": sent}

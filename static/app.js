@@ -507,3 +507,256 @@ function addMeta(container, text) {
   );
   load("30d");
 })();
+
+// ---------- Callers page: review inbox (QuickBooks-style) + screened directory ----------
+(function () {
+  const root = document.getElementById("callers");
+  if (!root) return;
+
+  function esc(s) {
+    const d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+  }
+  function fmtPhone(raw) {
+    let d = String(raw || "").replace(/\D/g, "");
+    if (d.length === 11 && d[0] === "1") d = d.slice(1);
+    return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : (raw || "");
+  }
+  function fmtDate(iso) {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  const CAT_LABEL = { personal: "Personal", vendor: "Vendor", blocked: "Blocked", customer: "Client" };
+  const CAT_PILL = { personal: "pill-neutral", vendor: "pill-warning", blocked: "pill-urgent", customer: "pill-booked" };
+  const CAT_OPTS = [["customer", "Client"], ["vendor", "Vendor"], ["personal", "Personal"], ["blocked", "Blocked"]];
+
+  // ===== Review inbox (To review / Sorted / Dismissed) =====
+  const tabs = [...root.querySelectorAll(".cl-tab")];
+  const inboxEl = document.getElementById("cl-inbox");
+  const searchEl = document.getElementById("cl-search");
+  const bulkBar = document.getElementById("cl-bulk");
+  const bulkCount = document.getElementById("cl-bulk-count");
+  const bulkActions = document.getElementById("cl-bulk-actions");
+  let tab = "pending";
+  let items = [];
+  const selected = new Set();
+
+  function setCounts(counts) {
+    tabs.forEach((t) => {
+      const badge = t.querySelector(".cl-tab-count");
+      if (badge) badge.textContent = (counts && counts[t.dataset.tab]) || 0;
+    });
+  }
+  function filtered() {
+    const q = (searchEl.value || "").trim().toLowerCase();
+    if (!q) return items;
+    const digits = q.replace(/\D/g, "");
+    return items.filter((s) =>
+      (s.name || "").toLowerCase().includes(q) ||
+      (digits && (s.number || "").includes(digits)) ||
+      (s.reason || "").toLowerCase().includes(q));
+  }
+  function renderInbox() {
+    const rows = filtered();
+    if (!rows.length) {
+      inboxEl.innerHTML = '<p class="cl-empty">' + (tab === "pending"
+        ? "Nothing to review. RingBack flags a caller here whenever they start to look like a client, a vendor, or spam."
+        : tab === "accepted" ? "Nothing sorted yet." : "Nothing dismissed.") + "</p>";
+      syncBulk();
+      return;
+    }
+    const head = tab === "pending"
+      ? '<th class="dt-check"><input type="checkbox" id="cl-all" aria-label="Select all"></th><th>Caller</th><th>Why</th><th>Suggested</th><th></th>'
+      : '<th class="dt-check"><input type="checkbox" id="cl-all" aria-label="Select all"></th><th>Caller</th><th>'
+        + (tab === "accepted" ? "Sorted as" : "Was") + "</th><th>When</th><th></th>";
+    const body = rows.map((s) => {
+      const checkAttr = selected.has(s.id) ? " checked" : "";
+      const check = `<td class="dt-check"><input type="checkbox" class="cl-pick" data-id="${s.id}"${checkAttr}></td>`;
+      const who = `<td class="dt-strong">${esc(s.name || fmtPhone(s.number))}<div class="cl-sub">${esc(fmtPhone(s.number))}</div></td>`;
+      if (tab === "pending") {
+        const opts = CAT_OPTS.map(([v, l]) => `<option value="${v}"${v === s.suggested_category ? " selected" : ""}>${l}</option>`).join("");
+        return `<tr data-id="${s.id}">${check}${who}<td class="dt-muted">${esc(s.reason || "")}</td>`
+          + `<td><select class="field-control cl-cat" aria-label="Category">${opts}</select></td>`
+          + `<td class="dt-actions"><button type="button" class="btn btn-primary btn-sm cl-accept">Accept</button> `
+          + `<button type="button" class="btn btn-ghost btn-sm cl-dismiss">Dismiss</button></td></tr>`;
+      }
+      const tone = CAT_PILL[s.suggested_category] || "pill-neutral";
+      return `<tr data-id="${s.id}">${check}${who}`
+        + `<td><span class="pill ${tone}">${esc(CAT_LABEL[s.suggested_category] || s.suggested_category)}</span></td>`
+        + `<td class="dt-muted">${esc(fmtDate(s.updated_at || s.created_at))}</td>`
+        + `<td class="dt-actions"><button type="button" class="btn btn-ghost btn-sm cl-reopen">Undo</button></td></tr>`;
+    }).join("");
+    inboxEl.innerHTML = `<div class="dt-wrap"><table class="dt"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+    wireRows();
+    syncBulk();
+  }
+  function wireRows() {
+    const all = document.getElementById("cl-all");
+    if (all) all.addEventListener("change", () => {
+      filtered().forEach((s) => (all.checked ? selected.add(s.id) : selected.delete(s.id)));
+      renderInbox();
+    });
+    inboxEl.querySelectorAll(".cl-pick").forEach((cb) =>
+      cb.addEventListener("change", () => {
+        const id = Number(cb.dataset.id);
+        cb.checked ? selected.add(id) : selected.delete(id);
+        syncBulk();
+      }));
+    inboxEl.querySelectorAll("tr[data-id]").forEach((tr) => {
+      const id = Number(tr.dataset.id);
+      const acc = tr.querySelector(".cl-accept");
+      if (acc) acc.addEventListener("click", () =>
+        act("/api/suggestions/" + id + "/accept", { category: tr.querySelector(".cl-cat").value }, tr, id));
+      const dis = tr.querySelector(".cl-dismiss");
+      if (dis) dis.addEventListener("click", () => act("/api/suggestions/" + id + "/dismiss", null, tr, id));
+      const reo = tr.querySelector(".cl-reopen");
+      if (reo) reo.addEventListener("click", () => act("/api/suggestions/" + id + "/reopen", null, tr, id));
+    });
+  }
+  function syncBulk() {
+    if (!bulkBar) return;
+    const n = selected.size;
+    bulkBar.hidden = n === 0;
+    if (!n) return;
+    bulkCount.textContent = n + " selected";
+    bulkActions.innerHTML = tab === "pending"
+      ? '<button type="button" class="btn btn-primary btn-sm" data-bulk="accept">Accept selected</button>'
+        + '<button type="button" class="btn btn-ghost btn-sm" data-bulk="dismiss">Dismiss selected</button>'
+      : '<button type="button" class="btn btn-ghost btn-sm" data-bulk="reopen">Undo selected</button>';
+    bulkActions.querySelectorAll("[data-bulk]").forEach((b) =>
+      b.addEventListener("click", () => bulk(b.dataset.bulk)));
+  }
+  async function act(url, body, tr, id) {
+    if (tr) tr.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      await apiFetch(url, body
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        : { method: "POST" });
+      selected.delete(id);
+      await loadTab();
+      loadDirectory();  // an accept/undo may have changed the directory
+    } catch (e) {
+      if (tr) tr.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  }
+  async function bulk(action) {
+    const ids = [...selected];
+    if (!ids.length) return;
+    try {
+      await apiFetch("/api/suggestions/bulk", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action }),
+      });
+      selected.clear();
+      await loadTab();
+      loadDirectory();
+    } catch (e) { window.alert(e.message); }
+  }
+  async function loadTab() {
+    try {
+      const d = await apiFetch("/api/suggestions?status=" + tab);
+      items = d.suggestions || [];
+      setCounts(d.counts);
+      renderInbox();
+    } catch (e) {
+      inboxEl.innerHTML = '<p class="cl-empty">Could not load callers.</p>';
+    }
+  }
+  tabs.forEach((t) => t.addEventListener("click", () => {
+    tabs.forEach((x) => { x.classList.remove("is-active"); x.setAttribute("aria-selected", "false"); });
+    t.classList.add("is-active"); t.setAttribute("aria-selected", "true");
+    tab = t.dataset.tab; selected.clear();
+    loadTab();
+  }));
+  if (searchEl) searchEl.addEventListener("input", renderInbox);
+
+  // ===== Screened directory (the manual rules) =====
+  const listEl = document.getElementById("screen-list");
+  const custEl = document.getElementById("screen-customers");
+  const numEl = document.getElementById("screen-number");
+  const catEl = document.getElementById("screen-category");
+  const nameEl = document.getElementById("screen-name");
+  const addBtn = document.getElementById("screen-add");
+
+  function renderDirectory(d) {
+    const managed = (d && d.managed) || [];
+    if (!managed.length) {
+      listEl.innerHTML = '<p class="screen-empty">No numbers screened yet. Add the owner’s '
+        + 'personal contacts, your suppliers, or a known spammer so RingBack never texts them.</p>';
+    } else {
+      listEl.innerHTML = managed.map((c) =>
+        `<div class="screen-row"><div class="screen-row-id">`
+        + `<span class="screen-row-name">${esc(c.name || fmtPhone(c.number))}</span>`
+        + `<span class="screen-row-num">${esc(fmtPhone(c.number))}</span></div>`
+        + `<span class="pill ${CAT_PILL[c.category] || "pill-neutral"}">${esc(CAT_LABEL[c.category] || c.category)}</span>`
+        + `<button type="button" class="btn btn-ghost btn-sm screen-remove" data-number="${esc(c.number)}" `
+        + `aria-label="Remove ${esc(fmtPhone(c.number))}">Remove</button></div>`
+      ).join("");
+      listEl.querySelectorAll(".screen-remove").forEach((b) =>
+        b.addEventListener("click", () => removeContact(b.dataset.number, b)));
+    }
+    const n = (d && d.customers) || 0;
+    custEl.textContent = n
+      ? `RingBack also recognizes ${n} past client${n === 1 ? "" : "s"} automatically, so their calls always get answered.`
+      : "";
+  }
+  async function loadDirectory() {
+    try { renderDirectory(await apiFetch("/api/contacts")); }
+    catch (e) { listEl.innerHTML = '<p class="screen-empty">Could not load your screened list.</p>'; }
+  }
+  async function addContact() {
+    const number = (numEl.value || "").trim();
+    if (!number) { numEl.focus(); return; }
+    addBtn.disabled = true;
+    try {
+      await apiFetch("/api/contacts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ number, category: catEl.value, name: (nameEl.value || "").trim() }),
+      });
+      numEl.value = ""; nameEl.value = "";
+      await loadDirectory();
+      numEl.focus();
+    } catch (e) { window.alert(e.message); } finally { addBtn.disabled = false; }
+  }
+  async function removeContact(number, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      await apiFetch("/api/contacts/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ number }),
+      });
+      await loadDirectory();
+    } catch (e) { if (btn) { btn.disabled = false; btn.textContent = "Try again"; } }
+  }
+  addBtn.addEventListener("click", addContact);
+  [numEl, nameEl].forEach((el) =>
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); addContact(); }
+    }));
+
+  loadTab();
+  loadDirectory();
+})();
+
+// ---------- Dashboard: re-engage a screened caller ----------
+(function () {
+  const buttons = document.querySelectorAll(".screen-engage[data-id]");
+  if (!buttons.length) return;
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const num = btn.dataset.num || "this caller";
+      if (!window.confirm("Text " + num + " back? They’ll be treated as a normal lead from now on.")) return;
+      btn.disabled = true;
+      btn.textContent = "Texting…";
+      try {
+        await apiFetch("/api/calls/" + btn.dataset.id + "/engage", { method: "POST" });
+        window.location.reload();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Try again";
+      }
+    });
+  });
+})();

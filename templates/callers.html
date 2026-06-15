@@ -1,0 +1,42 @@
+{% extends "app_shell.html" %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/card.html" import card %}
+
+{% block title %}Callers{% endblock %}
+{% block page_title %}Callers{% endblock %}
+{% block page_sub %}<p class="page-sub">RingBack sorts every caller so it never cold-texts the wrong person. Review its suggestions, or set your own.</p>{% endblock %}
+
+{% block content %}
+<div id="callers">
+  {% call card(title='For review', subtitle='RingBack watched these callers and guessed where they belong. Confirm it, change it, or dismiss it — one at a time or in bulk.', flush=true) %}
+    <div class="cl-toolbar">
+      <div class="cl-tabs" role="tablist" aria-label="Caller review">
+        <button type="button" class="cl-tab is-active" data-tab="pending" role="tab" aria-selected="true">To review <span class="cl-tab-count" data-count="pending">0</span></button>
+        <button type="button" class="cl-tab" data-tab="accepted" role="tab" aria-selected="false">Sorted <span class="cl-tab-count" data-count="accepted">0</span></button>
+        <button type="button" class="cl-tab" data-tab="dismissed" role="tab" aria-selected="false">Dismissed <span class="cl-tab-count" data-count="dismissed">0</span></button>
+      </div>
+      <input type="search" id="cl-search" class="field-control cl-search" placeholder="Search callers" aria-label="Search callers">
+    </div>
+    <div class="cl-bulk" id="cl-bulk" hidden>
+      <span class="cl-bulk-count" id="cl-bulk-count">0 selected</span>
+      <div class="cl-bulk-actions" id="cl-bulk-actions"></div>
+    </div>
+    <div class="cl-inbox" id="cl-inbox"></div>
+  {% endcall %}
+
+  {% call card(title='Screened numbers', subtitle='Numbers RingBack should never cold-text — the owner’s family, your suppliers, known spam. Your booked clients are recognized automatically.') %}
+    <div class="screen-add-row">
+      <input class="field-control" id="screen-number" type="tel" placeholder="Phone number" aria-label="Phone number to screen" autocomplete="off">
+      <select class="field-control" id="screen-category" aria-label="Why this number is screened">
+        <option value="personal">Personal</option>
+        <option value="vendor">Vendor / supplier</option>
+        <option value="blocked">Blocked / spam</option>
+      </select>
+      <input class="field-control" id="screen-name" type="text" placeholder="Label (optional)" aria-label="Label" autocomplete="off">
+      {{ button('Add', size='sm', id='screen-add') }}
+    </div>
+    <div class="screen-list" id="screen-list"></div>
+    <p class="screen-customers" id="screen-customers"></p>
+  {% endcall %}
+</div>
+{% endblock %}
