@@ -43,19 +43,21 @@ def init_db():
     c = conn.cursor()
     # NOT WAL. The DB lives on Render's network-attached /var/data disk, where SQLite
     # WAL's shared-memory (-shm / mmap) is unreliable and can hang the worker on boot
-    # ("No open HTTP ports detected"). The voice service relays over HTTP
-    # (/internal/voice/turn) and never opens this file directly, so a single-writer
-    # rollback journal is correct here and safe on a network filesystem.
+    # ("No open HTTP ports detected"). We keep this file in DELETE (rollback-journal)
+    # mode -- correct and safe on a network FS (the voice service relays over HTTP and
+    # never opens this file directly).
     #
-    # But the persisted /var/data file was created in WAL by older deploys, and
-    # *converting* WAL->DELETE forces SQLite to open the existing WAL db, which engages
-    # the -shm file on the network disk -- the exact thing that hangs. Setting
-    # EXCLUSIVE locking first keeps the WAL index in heap memory (no -shm file), so the
-    # one-time conversion runs safely on a network FS. This connection closes at the end
-    # of init_db, releasing the exclusive lock; every later get_conn() opens the now
-    # DELETE-mode file with normal shared locking. (No-op on a fresh/already-DELETE db.)
-    c.execute("PRAGMA locking_mode=EXCLUSIVE")
-    c.execute("PRAGMA journal_mode=DELETE")
+    # Older deploys created it in WAL. Converting WAL->DELETE needs an EXCLUSIVE lock,
+    # which DEADLOCKS during a zero-downtime deploy: the prior instance still holds the
+    # DB on the shared disk, so the new worker blocks on the lock, never opens the port,
+    # and Render fails the deploy. So only pay that cost when the file is ACTUALLY still
+    # in WAL -- a one-time migration. Reading the mode takes only a shared lock (fine
+    # during overlap); once it's DELETE we never grab the exclusive lock again, so new
+    # instances open the port immediately even while the old one is still shutting down.
+    mode = (c.execute("PRAGMA journal_mode").fetchone() or [""])[0]
+    if str(mode).lower() == "wal":
+        c.execute("PRAGMA locking_mode=EXCLUSIVE")
+        c.execute("PRAGMA journal_mode=DELETE")
     c.executescript(
         """
         CREATE TABLE IF NOT EXISTS businesses (
@@ -281,7 +283,16 @@ def init_db():
             ("forward_to", "TEXT"), ("timezone", "TEXT"),
             ("a2p_brand_sid", "TEXT"), ("a2p_campaign_sid", "TEXT"),
             ("a2p_status", "TEXT DEFAULT 'unregistered'"),
-            ("voice_callback_enabled", "INTEGER DEFAULT 0")):
+            ("voice_callback_enabled", "INTEGER DEFAULT 0"),
+            # Go-Live wizard (connections.py): A2P registration intake the founder
+            # submits to Twilio, the synced messaging-service sid, the submission
+            # timestamp, and whether the owner has confirmed carrier call-forwarding
+            # (which can't be verified server-side). Set by the wizard, NOT the
+            # Settings form, so they stay out of _BUSINESS_COLS like the rest above.
+            ("legal_business_name", "TEXT"), ("ein", "TEXT"),
+            ("business_address", "TEXT"), ("website", "TEXT"),
+            ("a2p_messaging_service_sid", "TEXT"), ("a2p_submitted_at", "TEXT"),
+            ("forwarding_confirmed", "INTEGER DEFAULT 0")):
         if col not in biz_cols:
             c.execute(f"ALTER TABLE businesses ADD COLUMN {col} {ddl}")
     # messages gain delivery tracking for real (Twilio) SMS.
@@ -446,6 +457,67 @@ def update_phone_voice(business_id, forward_to=None, voice_callback_enabled=None
     conn = get_conn()
     conn.execute(f"UPDATE businesses SET {', '.join(sets)} WHERE id=?",
                  tuple(vals) + (business_id,))
+    conn.commit()
+    conn.close()
+
+
+# ---- Go-Live wizard (connections.py) setters ----
+# Kept separate from update_business/_BUSINESS_COLS (which is also the seed INSERT
+# list) so these wizard-only columns are never blanked by a profile save.
+_A2P_PROFILE_COLS = ("legal_business_name", "ein", "business_address", "website")
+
+
+def update_a2p_profile(business_id, fields):
+    """Persist the A2P 10DLC registration intake (legal name, EIN, address, website).
+    Only writes the columns actually present in `fields`."""
+    cols = [c for c in _A2P_PROFILE_COLS if c in fields]
+    if not cols:
+        return
+    conn = get_conn()
+    sets = ", ".join(f"{c}=?" for c in cols)
+    conn.execute(f"UPDATE businesses SET {sets} WHERE id=?",
+                 tuple(fields[c] for c in cols) + (business_id,))
+    conn.commit()
+    conn.close()
+
+
+def set_a2p_status(business_id, status):
+    """Update just the A2P status (unregistered|pending|approved|failed). Used by the
+    Twilio status sync."""
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET a2p_status=? WHERE id=?", (status, business_id))
+    conn.commit()
+    conn.close()
+
+
+def set_a2p_registration(business_id, brand_sid=None, campaign_sid=None,
+                         messaging_service_sid=None, status=None, submitted_at=None):
+    """Record the A2P registration on a business (concierge submit + SID capture).
+    Only the provided fields are written, so recording SIDs later never clobbers an
+    earlier status."""
+    sets, vals = [], []
+    for col, val in (("a2p_brand_sid", brand_sid), ("a2p_campaign_sid", campaign_sid),
+                     ("a2p_messaging_service_sid", messaging_service_sid),
+                     ("a2p_status", status), ("a2p_submitted_at", submitted_at)):
+        if val is not None:
+            sets.append(f"{col}=?")
+            vals.append(val)
+    if not sets:
+        return
+    conn = get_conn()
+    conn.execute(f"UPDATE businesses SET {', '.join(sets)} WHERE id=?",
+                 tuple(vals) + (business_id,))
+    conn.commit()
+    conn.close()
+
+
+def set_forwarding_confirmed(business_id, confirmed):
+    """Record whether the owner has confirmed they set carrier call-forwarding to the
+    RingBack number (the one go-live step that happens on their physical phone and so
+    can't be verified server-side)."""
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET forwarding_confirmed=? WHERE id=?",
+                 (1 if confirmed else 0, business_id))
     conn.commit()
     conn.close()
 
@@ -1052,6 +1124,18 @@ def mark_call_engaged(call_id, lead_id=None):
                  (lead_id, call_id))
     conn.commit()
     conn.close()
+
+
+def last_inbound_call(business_id):
+    """The most recent inbound call logged for a business (any outcome), or None.
+    Used by the Go-Live page to confirm a real test call came through and whether we
+    engaged (texted the caller back)."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id, from_number, engaged, missed, created_at FROM calls "
+        "WHERE business_id=? ORDER BY created_at DESC LIMIT 1", (business_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def recent_screened_calls(business_id, limit=8):
