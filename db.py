@@ -38,26 +38,61 @@ from db_core import (now_iso, get_user, get_user_by_email, create_user,  # noqa:
                      log_turn, get_convo_turns, flag_counts)
 
 
+def _recover_network_fs_db(db_path):
+    """Heal a SQLite DB stuck in WAL mode on Render's network-attached /var/data disk.
+
+    WAL's shared-memory (-shm / mmap) is unreliable over a network filesystem, so if
+    stale `-wal`/`-shm` sidecars are present, *every* boot hangs the moment SQLite opens
+    the file ("No open HTTP ports detected") -- with or without an overlapping deploy.
+    We can't safely open it in place (that open is what hangs), so we recover on LOCAL
+    disk, where the -shm mmap works: copy the file out, checkpoint the -wal back IN (so
+    no committed data is lost), convert to DELETE, copy the clean single file back, and
+    drop the sidecars. Backs the live file up first. No-op (and near-instant) when the
+    DB is already healthy, so a normal boot pays nothing.
+    """
+    import os, shutil, tempfile
+    wal, shm = db_path + "-wal", db_path + "-shm"
+    if not (os.path.exists(wal) or os.path.exists(shm)):
+        return  # healthy: no WAL sidecars -> normal boot
+    try:
+        shutil.copy2(db_path, db_path + ".bak-wal-recover")
+        if os.path.exists(wal):
+            shutil.copy2(wal, db_path + ".bak-wal-recover-wal")
+    except OSError:
+        pass
+    tmp = tempfile.mkdtemp()
+    try:
+        local = os.path.join(tmp, "recover.db")
+        shutil.copy2(db_path, local)
+        if os.path.exists(wal):
+            shutil.copy2(wal, local + "-wal")  # carry committed-but-unflushed transactions
+        rc = sqlite3.connect(local, timeout=60)
+        try:
+            rc.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # fold -wal into the main db
+            rc.execute("PRAGMA journal_mode=DELETE")       # leave WAL behind for good
+            rc.execute("PRAGMA integrity_check")
+        finally:
+            rc.close()
+        shutil.copy2(local, db_path)                       # put back the clean DELETE-mode file
+        for f in (wal, shm):
+            try:
+                os.remove(f)
+            except FileNotFoundError:
+                pass
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def init_db():
+    # FIRST, before anything opens the DB: heal a WAL-stuck file on the network disk,
+    # else the very first open hangs and the gunicorn worker never binds its port.
+    _recover_network_fs_db(DB_PATH)
     conn = get_conn()
     c = conn.cursor()
-    # NOT WAL. The DB lives on Render's network-attached /var/data disk, where SQLite
-    # WAL's shared-memory (-shm / mmap) is unreliable and can hang the worker on boot
-    # ("No open HTTP ports detected"). We keep this file in DELETE (rollback-journal)
-    # mode -- correct and safe on a network FS (the voice service relays over HTTP and
-    # never opens this file directly).
-    #
-    # Older deploys created it in WAL. Converting WAL->DELETE needs an EXCLUSIVE lock,
-    # which DEADLOCKS during a zero-downtime deploy: the prior instance still holds the
-    # DB on the shared disk, so the new worker blocks on the lock, never opens the port,
-    # and Render fails the deploy. So only pay that cost when the file is ACTUALLY still
-    # in WAL -- a one-time migration. Reading the mode takes only a shared lock (fine
-    # during overlap); once it's DELETE we never grab the exclusive lock again, so new
-    # instances open the port immediately even while the old one is still shutting down.
-    mode = (c.execute("PRAGMA journal_mode").fetchone() or [""])[0]
-    if str(mode).lower() == "wal":
-        c.execute("PRAGMA locking_mode=EXCLUSIVE")
-        c.execute("PRAGMA journal_mode=DELETE")
+    # Keep the file in DELETE (rollback-journal) mode -- correct and safe on Render's
+    # network-attached /var/data disk, where WAL's -shm mmap is unreliable. Recovery
+    # above guarantees no live -wal remains, so this plain set never engages -shm.
+    c.execute("PRAGMA journal_mode=DELETE")
     c.executescript(
         """
         CREATE TABLE IF NOT EXISTS businesses (
