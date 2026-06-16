@@ -194,6 +194,10 @@ def init_db():
     # from the network-disk backup if it's missing (plain copy, no hang). Then heal any
     # WAL-stuck file (a near-no-op on the local disk) before the first open.
     restore_from_backup_if_needed()
+    import os as _os
+    _live_dir = _os.path.dirname(_os.fspath(DB_PATH))
+    if _live_dir:
+        _os.makedirs(_live_dir, exist_ok=True)   # ensure the (local) DB dir exists on a fresh boot
     _recover_network_fs_db(DB_PATH)
     conn = get_conn()
     c = conn.cursor()

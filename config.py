@@ -233,14 +233,21 @@ BASE_DIR = Path(__file__).resolve().parent
 # Defaults to a file beside the code. On a host (e.g. Render) point RINGBACK_DB_PATH
 # at a PERSISTENT disk (e.g. /var/data/ringback.db) so leads/bookings survive a
 # redeploy; without it the database resets on every deploy.
-DB_PATH = os.environ.get("RINGBACK_DB_PATH", "").strip() or (BASE_DIR / "ringback.db")
-# Optional DURABLE backup location (e.g. Render's network-attached /var/data). When set AND
-# different from DB_PATH, the app runs SQLite on DB_PATH (a fast LOCAL disk where it never
-# hangs), snapshots it here on a timer + at shutdown, and restores from here on boot if the
-# local file is missing. Unset = simple single-file mode (dev/tests). This is the durable
-# fix for the network-FS boot hang -- see db.py restore_from_backup_if_needed/backup_to_durable
-# and [[reference-ringback-wal-boot-hazard]].
-DB_BACKUP_PATH = os.environ.get("RINGBACK_DB_BACKUP_PATH", "").strip()
+# RINGBACK_DB_PATH is the durable at-rest location (e.g. Render's network-attached /var/data).
+_db_at_rest = os.environ.get("RINGBACK_DB_PATH", "").strip() or str(BASE_DIR / "ringback.db")
+# Durable local-disk mode (the fix for the network-FS boot hang): when RINGBACK_DB_LOCAL_MIRROR
+# is truthy, SQLite runs on a fast LOCAL disk (RINGBACK_DB_LOCAL_PATH, default /tmp/ringback.db)
+# where it never hangs, and the at-rest path becomes the durable backup we snapshot to on a timer
+# + at shutdown and restore from on boot. Only plain file copies ever touch the (network) at-rest
+# disk -- never a SQLite open. A build that doesn't know this flag just keeps using
+# RINGBACK_DB_PATH, so flipping it on/off is a safe no-op for old code (no dangerous transition).
+# See db.py restore_from_backup_if_needed / backup_to_durable + [[reference-ringback-wal-boot-hazard]].
+if os.environ.get("RINGBACK_DB_LOCAL_MIRROR", "").strip().lower() in ("1", "true", "yes", "on"):
+    DB_BACKUP_PATH = _db_at_rest
+    DB_PATH = os.environ.get("RINGBACK_DB_LOCAL_PATH", "").strip() or "/tmp/ringback.db"
+else:
+    DB_PATH = _db_at_rest
+    DB_BACKUP_PATH = os.environ.get("RINGBACK_DB_BACKUP_PATH", "").strip()
 
 # --- Scheduling -----------------------------------------------------------
 # The estimate windows RingBack offers on each OPEN day. The in-house calendar

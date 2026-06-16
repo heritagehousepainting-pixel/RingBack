@@ -25,14 +25,15 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.7"
-      # SQLite runs on the container's LOCAL disk (/tmp) where it never hangs; the durable
-      # single-file snapshot lives on the network disk and is restored on boot + backed up
-      # on a timer + at shutdown. This is the fix for the network-FS boot hang
-      # (see db.py + reference-ringback-wal-boot-hazard). Only plain file copies touch /var/data.
+      # RINGBACK_DB_PATH is the DURABLE at-rest location on the network disk. With
+      # RINGBACK_DB_LOCAL_MIRROR=1, SQLite actually runs on a fast LOCAL disk (/tmp) where it
+      # never hangs, and this /var/data file becomes the snapshot we restore-on-boot + back-up
+      # (timer + shutdown). Only plain file copies touch /var/data -- never a SQLite open. This
+      # is the fix for the network-FS boot hang (see db.py + reference-ringback-wal-boot-hazard).
       - key: RINGBACK_DB_PATH
-        value: /tmp/ringback.db
-      - key: RINGBACK_DB_BACKUP_PATH
         value: /var/data/ringback.db
+      - key: RINGBACK_DB_LOCAL_MIRROR
+        value: "1"
       - key: RINGBACK_SECRET        # signs login cookies
         generateValue: true
       - key: RINGBACK_TASKS_SECRET  # guards the scheduler endpoint /tasks/run-due
