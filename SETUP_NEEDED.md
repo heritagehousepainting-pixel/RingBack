@@ -32,6 +32,18 @@ beta / placeholder states into fully live ones. Integration credential steps liv
   SMTP (email). Each is a gated no-op that simulates in-app until configured — the UI
   already says so honestly.
 
+## To encrypt stored Google tokens at rest (recommended before prod)
+- Set **`RINGBACK_TOKEN_KEY`** (any long random string, different from `RINGBACK_SECRET`).
+  With it set, every Google access/refresh token is encrypted in the SQLite file
+  (`token_crypto.py`: stdlib HKDF + SHA-256 keystream + HMAC, encrypt-then-MAC, marked
+  `enc:v1:`). **Unset = safe no-op** so local dev and the current DB keep working.
+- **Migration-safe / dual-read:** already-connected businesses are untouched — their
+  legacy plaintext token still reads, and the next token refresh re-stores it encrypted.
+  No code mutates the live DB. **One-time re-encrypt path:** have each connected business
+  click **Disconnect → Connect** once (or just wait for the hourly refresh to roll them
+  over). Rotating the key makes old-key tokens unreadable → those businesses reconnect once.
+- See `USER_TO_DO.md → A2` for the step-by-step.
+
 ## Password reset (currently a gap)
 - There is **no automated password-reset flow**. "Forgot password?" on the login page now
   routes to `/contact` (honest: you reset it manually) instead of a dead `#` link.

@@ -30,6 +30,7 @@
           <span class="cl-import-hint">Coming soon.</span>
         {% endif %}
       </div>
+      {% if gcerror %}<p class="provider-note provider-note-err">{{ 'Add your Google credentials to enable Google Contacts.' if gcerror == 'unconfigured' else 'We couldn’t connect Google Contacts. Nothing was changed — please try again.' }}</p>{% endif %}
       <p class="cl-import-note">We keep only each contact’s name, number, and company — nothing else from your phone.</p>
       <p class="cl-import-result" id="cl-import-result" role="status" aria-live="polite"></p>
     </div>

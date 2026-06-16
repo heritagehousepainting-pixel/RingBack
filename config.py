@@ -190,6 +190,14 @@ DEBUG = os.environ.get("RINGBACK_DEBUG", "").strip().lower() in ("1", "true", "y
 # production (RINGBACK_SECRET); the fallback is for local dev only.
 SECRET_KEY = os.environ.get("RINGBACK_SECRET", "dev-insecure-secret-change-me")
 
+# Encrypts stored OAuth tokens (Google access/refresh) at rest in SQLite. A single
+# symmetric key; any non-empty string works (it's run through HKDF, see
+# token_crypto.py). When UNSET, encryption is a safe no-op so local dev keeps
+# working and existing plaintext rows still read. Set it in production to protect
+# the refresh tokens in the database file. Rotating it makes existing encrypted
+# tokens unreadable -- affected businesses simply reconnect (see SETUP_NEEDED.md).
+TOKEN_ENC_KEY = os.environ.get("RINGBACK_TOKEN_KEY", "").strip()
+
 # Cookie hardening. SameSite=Lax (applied in app.py) keeps the session cookie off
 # cross-site POSTs (CSRF). Secure = HTTPS-only; it stays OFF so local http dev and
 # the preview still work, and you turn it on in production (behind TLS) by setting

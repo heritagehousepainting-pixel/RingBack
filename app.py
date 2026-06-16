@@ -524,7 +524,8 @@ def callers_page():
     JS-driven via /api/*."""
     return render_template("callers.html",
                            gc_configured=google_contacts.configured(),
-                           gc_connected=google_contacts.is_connected(current_business()["id"]))
+                           gc_connected=google_contacts.is_connected(current_business()["id"]),
+                           gcerror=request.args.get("gcerror"))
 
 
 @app.route("/api/analytics")

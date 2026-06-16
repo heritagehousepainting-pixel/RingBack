@@ -7,6 +7,7 @@ one business. "Client zero" (Heritage House Painting) is business id 1.
 import re
 import sqlite3
 from datetime import datetime, timezone, date, timedelta
+import token_crypto
 from config import (DB_PATH, DEFAULT_BUSINESS, ESTIMATE_TIMES, BOOKING_HORIZON_DAYS,
                     DEFAULT_WORKING_DAYS, DEFAULT_BUFFER_MINUTES, app_tz)
 
@@ -911,7 +912,16 @@ def get_integration(business_id, provider):
     row = conn.execute("SELECT * FROM integrations WHERE business_id=? AND provider=?",
                        (business_id, provider)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    intg = dict(row)
+    # Decrypt tokens at rest. Dual-read: encrypted blobs are decrypted, legacy
+    # plaintext passes through unchanged, so businesses connected before encryption
+    # was switched on keep working (token_crypto.decrypt handles both).
+    for col in ("access_token", "refresh_token"):
+        if col in intg:
+            intg[col] = token_crypto.decrypt(intg[col])
+    return intg
 
 
 def set_integration(business_id, provider, connected):
@@ -942,6 +952,10 @@ def set_oauth_tokens(business_id, provider, access_token, refresh_token, token_e
             "refresh_token=NULL, token_expiry=NULL WHERE business_id=? AND provider=?",
             (business_id, provider))
     else:
+        # Encrypt tokens at rest (no-op when no key is configured). encrypt(None)
+        # stays None so the COALESCE still keeps an existing refresh token.
+        access_token = token_crypto.encrypt(access_token)
+        refresh_token = token_crypto.encrypt(refresh_token)
         conn.execute(
             "INSERT INTO integrations (business_id, provider, connected, connected_at, "
             "access_token, refresh_token, token_expiry) VALUES (?,?,?,?,?,?,?) "
@@ -957,20 +971,34 @@ def set_oauth_tokens(business_id, provider, access_token, refresh_token, token_e
 
 def set_google_tokens(business_id, access_token, refresh_token, token_expiry,
                       calendar_id="primary"):
-    """Store (or clear) a business's Google OAuth tokens and mark it connected."""
-    connected = 1 if access_token else 0
+    """Store (or clear) a business's Google OAuth tokens and mark it connected.
+
+    On connect/refresh (access_token given): upsert, encrypting tokens at rest, and
+    KEEP an existing refresh token when this response omitted one. On disconnect
+    (access_token None): a real forget -- clear the tokens outright (not just
+    connected=0), matching set_oauth_tokens so no refresh token lingers at rest."""
     conn = get_conn()
+    if access_token is None:
+        conn.execute(
+            "UPDATE integrations SET connected=0, connected_at=NULL, access_token=NULL, "
+            "refresh_token=NULL, token_expiry=NULL WHERE business_id=? AND provider='google'",
+            (business_id,))
+        conn.commit()
+        conn.close()
+        return
+    # Encrypt tokens at rest (no-op when no key is configured).
+    enc_access = token_crypto.encrypt(access_token)
+    enc_refresh = token_crypto.encrypt(refresh_token)
     conn.execute(
         "INSERT INTO integrations (business_id, provider, connected, connected_at, "
         "access_token, refresh_token, token_expiry, calendar_id) "
-        "VALUES (?, 'google', ?, ?, ?, ?, ?, ?) "
+        "VALUES (?, 'google', 1, ?, ?, ?, ?, ?) "
         "ON CONFLICT(business_id, provider) DO UPDATE SET "
         "connected=excluded.connected, connected_at=excluded.connected_at, "
         "access_token=excluded.access_token, "
         "refresh_token=COALESCE(excluded.refresh_token, integrations.refresh_token), "
         "token_expiry=excluded.token_expiry, calendar_id=excluded.calendar_id",
-        (business_id, connected, now_iso() if connected else None,
-         access_token, refresh_token, token_expiry, calendar_id),
+        (business_id, now_iso(), enc_access, enc_refresh, token_expiry, calendar_id),
     )
     conn.commit()
     conn.close()

@@ -241,6 +241,26 @@ secure.
    cookie is only ever sent over a secure connection. (Leave it off for local
    http testing, or the browser won't store the cookie and you can't stay logged in.)
 
+### A2. Encrypt stored Google tokens at rest (recommended)
+When a contractor connects Google, RingBack stores a **refresh token** for their
+account in the database. Set a token-encryption key so those are encrypted on disk
+instead of saved in plain text.
+1. Generate a random value: `python3 -c "import secrets; print(secrets.token_hex(32))"`
+2. Add it to `ringback/.env` (use a **different** value than `RINGBACK_SECRET`):
+   ```
+   RINGBACK_TOKEN_KEY=the-long-random-value-you-just-generated
+   ```
+3. Restart. From now on every newly stored/refreshed Google token is encrypted.
+   - **Leave it unset for local testing** and nothing breaks — tokens are just
+     stored as-is (the app reads both forms).
+   - **Already-connected businesses keep working** without reconnecting: their old
+     plain-text token still reads, and the next automatic refresh re-saves it
+     encrypted. To encrypt everyone immediately instead of waiting for the next
+     refresh, have each connected business click **Disconnect → Connect** once
+     (there's no code that rewrites the live database for you, by design).
+   - **Keep this key safe and don't change it.** If you rotate it, tokens encrypted
+     with the old key become unreadable and those businesses simply reconnect once.
+
 ### B. Keep debug mode OFF
 It's already off by default — just **never** set `RINGBACK_DEBUG=1` on the live
 server (it would expose a remote code console).

@@ -22,6 +22,7 @@ from urllib.parse import urlencode
 
 import db
 import contact_import
+from google_oauth import access_is_fresh
 from config import (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
                     GOOGLE_CONTACTS_REDIRECT_URI)
 
@@ -91,14 +92,7 @@ def _access_token(business_id):
     intg = db.get_integration(business_id, PROVIDER)
     if not intg or not intg.get("refresh_token"):
         return None
-    fresh = True
-    if intg.get("access_token") and intg.get("token_expiry"):
-        try:
-            exp = datetime.fromisoformat(intg["token_expiry"])
-            fresh = exp <= datetime.now(timezone.utc) + timedelta(seconds=60)
-        except ValueError:
-            fresh = True
-    if not fresh:
+    if intg.get("access_token") and access_is_fresh(intg.get("token_expiry")):
         return intg["access_token"]
     import requests
     try:
