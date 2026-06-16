@@ -20,6 +20,12 @@
 .nav-item svg{width:18px;height:18px;flex:0 0 auto}
 .nav-item:hover{background:var(--bg);color:var(--ink)}
 .nav-item.active{background:var(--accent-bg);color:var(--accent-strong);font-weight:600}
+/* Go Live, pinned to the top until live: accent-emphasized so it reads as the next action. */
+.nav-item-golive{color:var(--accent-strong);font-weight:600}
+.nav-item-golive svg{color:var(--accent)}
+/* Go Live, completed + retired to the bottom: muted, with a success check pushed to the right. */
+.nav-item.is-complete{color:var(--ink-soft)}
+.nav-item .nav-check{width:14px;height:14px;color:var(--success);margin-left:auto}
 .sidebar-foot{margin-top:auto;display:flex;align-items:center;gap:var(--space-3);
   padding:var(--space-3);border-top:1px solid var(--border)}
 .sidebar-foot .avatar{flex:0 0 auto;display:flex;align-items:center;justify-content:center;

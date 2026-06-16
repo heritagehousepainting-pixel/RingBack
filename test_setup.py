@@ -586,6 +586,28 @@ check("setup page renders the 'fully set up' section", b"Get the most out of" in
 check("setup page shows the recommended meter", b"fs-meter" in r_setup.data and b"set up" in r_setup.data)
 
 
+# ====================== Go-Live nav placement + first-login landing ======================
+# Force the non-A2P prerequisites so toggling A2P alone flips is_live on/off deterministically.
+db.set_business_twilio(1, "+12677562454", "PNheritage", webhooks_wired=True)
+db.set_forwarding_confirmed(1, True)
+
+# Not live -> Go Live is pinned to the top (accent-emphasized), no completion check, and login lands there.
+db.set_a2p_status(1, "pending")
+nav_nl = client.get("/dashboard").data
+check("nav: incomplete -> Go Live pinned to top (emphasized)", b"nav-item-golive" in nav_nl)
+check("nav: incomplete -> no completion check shown", b"nav-check" not in nav_nl)
+check("landing: incomplete -> login lands on the Go Live wizard",
+      login().headers.get("Location", "").endswith("/setup"))
+
+# Live -> Go Live retires to the bottom with a check, and login lands on the command center.
+db.set_a2p_status(1, "approved")
+nav_live = client.get("/dashboard").data
+check("nav: complete -> completion check shown", b"nav-check" in nav_live)
+check("nav: complete -> no longer top-emphasized", b"nav-item-golive" not in nav_live)
+check("landing: complete -> login lands on the command center",
+      login().headers.get("Location", "").endswith("/dashboard"))
+
+
 print(f"\n{_pass} passed, {_fail} failed")
 try:
     os.unlink(_TMP.name)

@@ -167,8 +167,12 @@ def inject_globals():
     # in, else client zero (business 1) for the marketing pages.
     u = current_user()
     biz = db.get_business(u["business_id"]) if u else db.get_business(1)
+    # `golive_complete` drives the sidebar: Go Live sits pinned at the top until the
+    # tenant is live, then retires to the bottom with a check. Only meaningful when
+    # signed in (no template renders on JSON/webhook routes, so this stays cheap).
+    golive_complete = bool(u and connections.is_live(biz))
     return {"app_name": APP_NAME, "tagline": TAGLINE, "brain": ai.brain_mode(),
-            "business": biz, "current_user": u}
+            "business": biz, "current_user": u, "golive_complete": golive_complete}
 
 
 # ---- Pages ----
@@ -186,10 +190,20 @@ def tour():
     return redirect("/")
 
 
+def _landing_path():
+    """Where a signed-in owner lands: the Go-Live wizard until they're live, then the
+    command center. Makes /setup the first screen a new tenant sees, and retires it
+    automatically once setup is complete."""
+    u = current_user()
+    if not u:
+        return "/login"
+    return "/dashboard" if connections.is_live(db.get_business(u["business_id"])) else "/setup"
+
+
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if session.get("uid"):
-        return redirect("/dashboard")
+        return redirect(_landing_path())
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
@@ -216,14 +230,14 @@ def signup():
         uid = db.create_user(email, generate_password_hash(password), bid)
         session.clear()
         session["uid"] = uid
-        return redirect("/dashboard")
+        return redirect("/setup")   # a brand-new tenant always starts at Go Live
     return render_template("auth.html", mode="signup")
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("uid"):
-        return redirect("/dashboard")
+        return redirect(_landing_path())
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
@@ -233,7 +247,8 @@ def login():
                                    error="Email or password is incorrect."), 401
         session.clear()
         session["uid"] = user["id"]
-        return redirect(_safe_next(request.args.get("next")))
+        nxt = request.args.get("next")
+        return redirect(_safe_next(nxt) if nxt else _landing_path())
     return render_template("auth.html", mode="login")
 
 
