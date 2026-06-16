@@ -1,0 +1,220 @@
+{% extends "app_shell.html" %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/input.html" import field %}
+{% from "components/ui/badge.html" import pill %}
+
+{% block title %}Go Live{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/setup.css">{% endblock %}
+{% block page_title %}Go Live{% endblock %}
+{% block page_sub %}<p class="page-sub">Connect your phone so {{ app_name }} texts back every missed call — no tech setup, we walk you through it.</p>{% endblock %}
+{% block header_actions %}{% if live_verified %}{{ pill('Live', 'booked', dot=true) }}{% elif is_live %}{{ pill('Almost', 'warning', dot=true) }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="setup-col">
+
+  {# ---- Honest progress banner: three states, gated on the backend's flags.
+         live_verified means truly live; is_live (not verified) means setup is done but
+         needs a test call; else still has blockers. Never claims "live" pre-verified. ---- #}
+  {% if live_verified %}
+  <div class="setup-banner is-live">
+    <svg class="b-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+    <div>
+      <p class="b-title">You're live.</p>
+      <p class="b-sub">{{ app_name }} is texting back missed calls from {{ business.twilio_number }}.</p>
+      {% if last_call %}
+      <p class="setup-note is-ok">Last test call from {{ last_call.from_number }} — we texted them back.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% elif is_live %}
+  <div class="setup-banner is-verify">
+    <svg class="b-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    <div>
+      <p class="b-title">Setup complete — make a test call to confirm.</p>
+      <p class="b-sub">Forwarding's set. Place one test call so {{ app_name }} can prove it texts back — then you're fully live. The easy check: call your {{ app_name }} number and let it connect.</p>
+      {% if business.twilio_number %}
+      <p class="b-act"><a class="btn btn-secondary btn-sm" href="tel:{{ business.twilio_number|replace('#','%23') }}">Call {{ business.twilio_number }} to test</a></p>
+      {% endif %}
+      {% if last_call %}
+      <p class="setup-note">Last call from {{ last_call.from_number }} — {{ 'texted back' if last_call.engaged else 'received, no text back yet' }}.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="setup-banner">
+    <svg class="b-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    <div>
+      <p class="b-title">{{ done_count }} of {{ steps|length }} steps done</p>
+      <p class="b-sub">A few things left before {{ app_name }} can text your customers:</p>
+      <ul class="setup-blockers">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---- The steps ---- #}
+  <ol class="stepper" aria-label="Go-live setup steps">
+    {% for s in steps %}
+    {% set open = s.open or (edit == s.key and s.done) %}
+    <li class="step is-{{ s.status }}"{% if s.status == 'current' %} aria-current="step"{% endif %} aria-label="Step {{ loop.index }} of {{ steps|length }}: {{ s.title }}{% if s.done %} — done{% endif %}">
+      <div class="step-head">
+        <span class="step-num" aria-hidden="true">{% if s.done %}&#10003;{% else %}{{ loop.index }}{% endif %}</span>
+        <div class="step-head-text">
+          <h2 class="step-title">{{ s.title }}</h2>
+        </div>
+        <span class="step-status">
+          {%- if s.status == 'done' -%}{{ pill('Done', 'booked', dot=true) }}
+          {%- elif s.status == 'current' -%}{{ pill('Now', 'new', dot=true) }}
+          {%- elif s.status == 'ready' -%}{{ pill('Ready', 'new') }}
+          {%- else -%}{{ pill('Next', 'neutral') }}{%- endif -%}
+        </span>
+      </div>
+
+      {% if open %}
+      <div class="step-body">
+        {# ===== Step: Business profile (Phase 1) ===== #}
+        {% if s.key == 'profile' %}
+        <form method="post" action="/setup/profile" class="step-form">
+          <div class="field-grid">
+            {{ field('Business name', name='name', value=business.name or '', required=true) }}
+            {{ field('Trade / services', name='trade', value=business.trade or '', placeholder='e.g. Painting') }}
+            {{ field('Owner name', name='owner_name', value=business.owner_name or '') }}
+            {{ field('Service area', name='service_area', value=business.service_area or '') }}
+            {{ field('Legal business name', name='legal_business_name', value=business.legal_business_name or business.name or '', help='The exact legal name on your tax paperwork. The phone carriers verify it.') }}
+            {{ field('EIN (business tax ID)', name='ein', value=business.ein or '', placeholder='12-3456789', required=true, help='Required by U.S. carriers to send business texts. A sole proprietor can register with their EIN.') }}
+            {{ field('Business address', name='business_address', value=business.business_address or '', required=true, placeholder='Street, City, State ZIP') }}
+            {{ field('Website (optional)', name='website', value=business.website or '', type='url', placeholder='https://yourbusiness.com') }}
+          </div>
+          {{ button('Save & continue', type='submit') }}
+        </form>
+
+        {# ===== Step: Number (Phase 2) ===== #}
+        {% elif s.key == 'number' %}
+        {% if not sms_configured %}
+        <p class="setup-note is-pending">Connecting to our phone provider… check back in a minute. (Twilio isn't configured on the server yet.)</p>
+        {% else %}
+        <p class="setup-note">Pick a local number for {{ app_name }} — we wire it up automatically. Customers keep calling your real number; only the <em>missed</em> ones reach this one.</p>
+        {# refine the area code, then show available numbers (no buy yet) #}
+        <form method="get" action="/setup" class="step-form">
+          <input type="hidden" name="edit" value="number">
+          <div class="field-grid">
+            {{ field('Area code', name='area_code', value=area_code, placeholder='267') }}
+          </div>
+          {{ button('Show available numbers', variant='secondary', size='sm', type='submit') }}
+        </form>
+        <form method="post" action="/setup/number" class="step-form">
+          <input type="hidden" name="mode" value="buy">
+          <input type="hidden" name="area_code" value="{{ area_code }}">
+          {% if available %}
+          <div class="num-list">
+            {% for n in available %}
+            <label class="num-opt"><input type="radio" name="number" value="{{ n }}"{{ ' checked' if loop.first else '' }}> {{ n }}</label>
+            {% endfor %}
+          </div>
+          {{ button('Buy this number', type='submit') }}
+          {% else %}
+          <p class="setup-note">No numbers loaded for <strong>{{ area_code or '—' }}</strong> yet. Set your area code above and show numbers, or we'll grab the first available one.</p>
+          {{ button('Find & buy a number', type='submit') }}
+          {% endif %}
+        </form>
+        <p class="setup-note">Already bought a number? Attach it instead:</p>
+        <form method="post" action="/setup/number" class="step-form">
+          <input type="hidden" name="mode" value="attach">
+          <div class="field-grid">
+            {{ field('Your Twilio number', name='number', value='', type='tel', placeholder='+1 267 756 2454') }}
+          </div>
+          {{ button('Attach this number', variant='secondary', size='sm', type='submit') }}
+        </form>
+        {% endif %}
+
+        {# ===== Step: A2P registration (Phase 3) ===== #}
+        {% elif s.key == 'a2p' %}
+        {% set status = business.a2p_status or 'unregistered' %}
+        {% if status == 'pending' %}
+        <p class="setup-note is-pending">Carriers are reviewing your registration — usually a few hours, sometimes a day. You'll go live <strong>automatically</strong> the moment it's approved; nothing else to do here.</p>
+        <form method="get" action="/setup" class="step-form">
+          <input type="hidden" name="edit" value="a2p">
+          {{ button('Re-check status', variant='secondary', size='sm', type='submit') }}
+        </form>
+        {% elif status == 'failed' %}
+        <p class="setup-note is-pending">The carriers couldn't approve your registration. Double-check your legal name and EIN in step&nbsp;1, then resubmit.</p>
+        <form method="post" action="/setup/a2p" class="step-form">
+          <input type="hidden" name="mode" value="submit">
+          {{ button('Resubmit for registration', type='submit') }}
+        </form>
+        {% else %}
+        <p class="setup-note">U.S. carriers require every business that texts to be registered — it's called A2P 10DLC. We handle the paperwork: just submit and we'll register <strong>{{ business.legal_business_name or business.name }}</strong> with the EIN on file.</p>
+        <form method="post" action="/setup/a2p" class="step-form">
+          <input type="hidden" name="mode" value="submit">
+          {{ button('Submit for carrier registration', type='submit') }}
+        </form>
+        {% endif %}
+        <details class="setup-adv">
+          <summary>Installer: paste your Twilio campaign details</summary>
+          <form method="post" action="/setup/a2p" class="step-form">
+            <input type="hidden" name="mode" value="record">
+            <div class="field-grid">
+              {{ field('Brand SID', name='brand_sid', value=business.a2p_brand_sid or '', placeholder='BN…') }}
+              {{ field('Messaging Service SID', name='messaging_service_sid', value=business.a2p_messaging_service_sid or '', placeholder='MG…') }}
+              {{ field('Campaign SID', name='campaign_sid', value=business.a2p_campaign_sid or '', placeholder='CM…') }}
+            </div>
+            {{ button('Save &amp; check approval', variant='secondary', size='sm', type='submit') }}
+          </form>
+        </details>
+
+        {# ===== Step: Forwarding (Phase 4) ===== #}
+        {% elif s.key == 'forwarding' %}
+        <p class="setup-note">The last step happens on your phone: tell your carrier to send <em>missed</em> calls to {{ app_name }}. You keep answering calls normally — only the ones you miss get a text back.</p>
+        {# pick the carrier, re-render with that carrier's exact code #}
+        <form method="get" action="/setup" class="step-form">
+          <input type="hidden" name="edit" value="forwarding">
+          <label class="field-label" for="carrier">Your phone carrier</label>
+          <select class="field-control" id="carrier" name="carrier" onchange="this.form.submit()">
+            {% for key, c in carriers.items() %}
+            <option value="{{ key }}"{{ ' selected' if key == carrier else '' }}>{{ c.label }}</option>
+            {% endfor %}
+          </select>
+          {# Always rendered so the carrier picker works with zero JS; the select's
+             onchange auto-submit above is a progressive enhancement on top. #}
+          {{ button('Show my code', variant='secondary', size='sm', type='submit') }}
+        </form>
+        <div class="code-card">
+          <div class="code-dial">{{ fwd.activate }}</div>
+          <p class="code-note">{{ fwd.note }} <a href="tel:{{ fwd.activate|replace('#','%23') }}">Tap to dial it</a>.</p>
+          <p class="code-cancel">To turn it off later, dial <strong>{{ fwd.cancel }}</strong>.</p>
+        </div>
+        <form method="post" action="/setup/forwarding" class="step-form">
+          <input type="hidden" name="mode" value="catcher">
+          {{ button("I've set up forwarding", type='submit') }}
+        </form>
+        <details class="setup-adv">
+          <summary>Advanced: ring my cell first instead</summary>
+          <form method="post" action="/setup/forwarding" class="step-form">
+            <input type="hidden" name="mode" value="dial">
+            <p class="setup-note">{{ app_name }} rings this number first; if you don't pick up, it texts the caller back. (Use this only if customers will call your RingBack number directly.)</p>
+            <div class="field-grid">
+              {{ field('Ring this cell first', name='forward_to', value=business.forward_to or '', type='tel', placeholder='+1 555 123 4567') }}
+            </div>
+            {{ button('Use ring-first', variant='secondary', size='sm', type='submit') }}
+          </form>
+        </details>
+        {% endif %}
+      </div>
+
+      {% elif s.done %}
+      <div class="step-summary">
+        <span class="s-text">
+          {%- if s.key == 'profile' -%}<strong>{{ business.name }}</strong> — EIN on file
+          {%- elif s.key == 'number' -%}<strong>{{ business.twilio_number }}</strong>
+          {%- elif s.key == 'a2p' -%}Registered &amp; approved by the carriers
+          {%- elif s.key == 'forwarding' -%}Missed calls forward to {{ app_name }}
+          {%- endif -%}
+        </span>
+        <a class="btn btn-ghost btn-sm" href="/setup?edit={{ s.key }}">Edit</a>
+      </div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+
+</div>
+{% endblock %}

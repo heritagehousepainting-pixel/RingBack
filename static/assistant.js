@@ -247,6 +247,53 @@
     } else if (card.type === "note") {
       c.classList.add("a-note"); if (card.tone) c.classList.add(card.tone);
       c.textContent = card.body || "";
+    } else if (card.type === "golive") {
+      c.classList.add("a-golive");
+      /* header: "Getting you live" + an honest status pill. The pill never says
+         "You're live" unless the backend reported status === "live" (verified). */
+      var head = el("div", "ag-head");
+      head.appendChild(el("div", "a-card-title", "Getting you live"));
+      var PILL = { not_live: ["pill-neutral", "Not live yet"],
+                   setup_complete: ["pill-warning", "Make a test call"],
+                   live: ["pill-booked", "You're live"] };
+      var pm = PILL[card.status] || PILL.not_live;
+      var pill = el("span", "pill " + pm[0]);
+      pill.appendChild(el("span", "pill-dot"));
+      pill.appendChild(document.createTextNode(pm[1]));
+      head.appendChild(pill);
+      c.appendChild(head);
+
+      /* mini-stepper: state shown by shape (dot fill) + a visually-hidden word, never
+         color alone. The active node carries aria-current; glyph dots are aria-hidden. */
+      var STATE_WORD = { done: "done", current: "in progress", ready: "ready", todo: "to do" };
+      var steps = card.steps || [];
+      var nav = el("ol", "ag-steps");
+      nav.setAttribute("aria-label", (card.done || 0) + " of " + (card.total || steps.length) + " steps complete");
+      steps.forEach(function (s) {
+        var li = el("li", "ag-step is-" + (s.state || "todo"));
+        if (s.state === "current") li.setAttribute("aria-current", "step");
+        var dot = el("span", "ag-dot"); dot.setAttribute("aria-hidden", "true");
+        li.appendChild(dot);
+        li.appendChild(el("span", "ag-step-title", s.title || ""));
+        li.appendChild(el("span", "sr-only", " — " + (STATE_WORD[s.state] || "to do")));
+        nav.appendChild(li);
+      });
+      c.appendChild(nav);
+      c.appendChild(el("div", "ag-count", (card.done || 0) + " of " + (card.total || steps.length)));
+
+      /* blocker line — omitted entirely when there's nothing blocking (no fake reassurance). */
+      if (card.blocker) {
+        var bl = el("div", "ag-blocker");
+        bl.appendChild(el("span", "ag-blocker-k", "Next: "));
+        bl.appendChild(el("span", "ag-blocker-v", card.blocker));
+        c.appendChild(bl);
+      }
+
+      var gacts = el("div", "a-actions");
+      var ga = el("a", "a-btn primary", card.label || "Open Go Live");
+      ga.href = card.href || "/setup";
+      gacts.appendChild(ga);
+      c.appendChild(gacts);
     } else {
       c.classList.add("a-note"); c.textContent = card.body || "";
     }

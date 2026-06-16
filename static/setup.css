@@ -1,0 +1,73 @@
+/* ============================================================================
+   Go-Live wizard (/setup). Stepper + per-step state. Tokens only — no literals.
+   ============================================================================ */
+.setup-col{display:flex;flex-direction:column;gap:var(--space-6);max-width:780px}
+
+/* ---- Progress banner ---- */
+.setup-banner{display:flex;gap:var(--space-4);align-items:flex-start;
+  padding:var(--space-4) var(--space-6);border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-card)}
+.setup-banner.is-live{border-color:var(--success);background:var(--success-bg)}
+.setup-banner.is-verify{border-color:var(--warning);background:var(--warning-bg)}
+.setup-banner .b-icon{flex:0 0 auto;width:24px;height:24px;color:var(--ink-soft)}
+.setup-banner.is-live .b-icon{color:var(--success)}
+.setup-banner.is-verify .b-icon{color:var(--warning)}
+.setup-banner .b-act{margin:var(--space-3) 0 0}
+.setup-banner .b-title{font-weight:700;color:var(--ink);margin:0 0 var(--space-1);font-size:var(--text-md)}
+.setup-banner .b-sub{margin:0;color:var(--ink-soft);font-size:var(--text-sm)}
+.setup-blockers{margin:var(--space-2) 0 0;padding-left:var(--space-4);
+  color:var(--ink-soft);font-size:var(--text-sm)}
+.setup-blockers li{margin:var(--space-1) 0}
+
+/* ---- Stepper (an ordered list of setup steps) ---- */
+.stepper{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--space-4)}
+.step{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
+  box-shadow:var(--shadow-card);overflow:hidden}
+.step.is-current{border-color:var(--accent)}
+/* "todo" steps read as upcoming by muting the title only — the number badge and status
+   pill stay at full contrast so the step number is always legible (WCAG AA). */
+.step.is-todo .step-title{opacity:.72}
+.step-head{display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-6)}
+.step-num{flex:0 0 auto;width:28px;height:28px;border-radius:var(--radius-pill);
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:var(--text-sm);font-weight:700;border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--ink-soft)}
+.step.is-done .step-num{background:var(--success-bg);border-color:var(--success);color:var(--success)}
+.step.is-current .step-num{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.step-head-text{flex:1 1 auto;min-width:0}
+.step-title{margin:0;font-size:var(--text-md);font-weight:700;color:var(--ink)}
+.step-status{flex:0 0 auto}
+
+/* body shown for the current (or being-edited) step */
+.step-body{padding:0 var(--space-6) var(--space-6);border-top:1px solid var(--border)}
+.step-body>*:first-child{margin-top:var(--space-4)}
+.step-form{display:flex;flex-direction:column;gap:var(--space-4)}
+.step-summary{padding:0 var(--space-6) var(--space-4);display:flex;align-items:center;
+  justify-content:space-between;gap:var(--space-4)}
+.step-summary .s-text{font-size:var(--text-sm);color:var(--ink-soft)}
+.step-summary .s-text strong{color:var(--ink)}
+
+/* number picker results */
+.num-list{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-2) 0}
+.num-opt{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);
+  border:1px solid var(--border-strong);border-radius:var(--radius-pill);
+  font-family:var(--mono);font-size:var(--text-sm);background:var(--surface);cursor:pointer}
+.num-opt input{accent-color:var(--accent)}
+
+/* dialable star code block (forwarding) */
+.code-card{margin:var(--space-3) 0;padding:var(--space-4) var(--space-6);
+  border:1px dashed var(--border-strong);border-radius:var(--radius);background:var(--surface-2)}
+.code-dial{font-family:var(--mono);font-size:var(--text-xl);font-weight:700;color:var(--ink);
+  letter-spacing:.5px;word-break:break-all}
+.code-note{margin:var(--space-2) 0 0;font-size:var(--text-sm);color:var(--ink-soft)}
+.code-cancel{margin:var(--space-1) 0 0;font-size:var(--text-xs);color:var(--ink-soft)}
+
+/* advanced/installer disclosure (paste Twilio SIDs) */
+.setup-adv{margin-top:var(--space-3);border-top:1px solid var(--border);padding-top:var(--space-3)}
+.setup-adv summary{cursor:pointer;font-size:var(--text-sm);color:var(--ink-soft);font-weight:600}
+.setup-adv .step-form{margin-top:var(--space-3)}
+
+/* honest "pending carriers" note */
+.setup-note{font-size:var(--text-sm);color:var(--ink-soft);margin:var(--space-2) 0 0}
+.setup-note.is-pending{color:var(--warning)}
+.setup-note.is-ok{color:var(--success)}

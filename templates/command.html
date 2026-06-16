@@ -3,7 +3,7 @@
 {% block page_title %}{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="/static/assistant.css?v=6">
+<link rel="stylesheet" href="/static/assistant.css?v=7">
 <section class="command-shell" id="command"
          data-suggestions='{{ suggestions|tojson }}'
          data-hello="{{ hello }}">
@@ -24,6 +24,22 @@
         leads and booked estimates, save a contact, connect your calendar, and text a lead
         back. You can still work by hand in the <a href="/pipeline">Pipeline</a>.</p>
       {% if digest and digest.has_content %}<p class="convo-digest">{{ digest.line }} <a href="/training">Review in Memory</a>.</p>{% endif %}
+      {# Go-live nudge: server-rendered, works with zero JS, and the no-JS path to /setup.
+         Honest — never shown once the tenant is verified-live (golive.live_verified). #}
+      {% if golive and not golive.live_verified %}
+      <p class="convo-setup convo-setup--{{ golive.status }}">
+        <a class="convo-setup-link" href="/setup">
+          {% if golive.status == 'setup_complete' %}
+          <svg class="convo-setup-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+          <span class="convo-setup-text">You're set up — make a test call to confirm forwarding works</span>
+          {% else %}
+          <svg class="convo-setup-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
+          <span class="convo-setup-text">Finish setup to start catching missed calls — {{ golive.done }} of {{ golive.total }} done</span>
+          {% endif %}
+          <svg class="convo-setup-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </a>
+      </p>
+      {% endif %}
     </div>
     <div class="transcript" id="transcript" aria-live="polite"></div>
   </div>
@@ -46,5 +62,5 @@
 
   <input type="hidden" id="csrfToken" value="">
 </section>
-<script defer src="/static/assistant.js?v=7"></script>
+<script defer src="/static/assistant.js?v=8"></script>
 {% endblock %}
