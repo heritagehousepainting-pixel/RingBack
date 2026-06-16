@@ -656,13 +656,24 @@ def setup():
     last_call = db.last_inbound_call(biz["id"]) if biz.get("twilio_number") else None
     is_live = connections.is_live(biz, sms_configured)
     live_verified = bool(is_live and last_call and last_call.get("engaged"))
+    # "Fully set up" tier: recommended connections beyond go-live. Status-only and
+    # deep-linked into Settings; never gates `is_live`/`live_verified`. Signals reuse the
+    # same checks Settings does (calendar/contacts connection, the business flags) plus
+    # whether the owner moved off the seed password.
+    user = current_user()
+    recommended = connections.recommended_setup(
+        biz,
+        calendar_connected=google_cal.is_connected(biz["id"]),
+        contacts_connected=google_contacts.is_connected(biz["id"]),
+        password_changed=not (user and check_password_hash(user["password_hash"], SEED_OWNER_PASSWORD)),
+        ai_default=config.DEFAULT_BUSINESS.get("ai_instructions", ""))
     return render_template(
         "setup.html", business=biz, steps=steps,
         done_count=sum(1 for s in steps if s["done"]), last_call=last_call,
         current=current, area_code=area_code, available=available,
         carrier=fwd["carrier"], fwd=fwd, carriers=connections.CARRIER_FORWARD_CODES,
         blockers=connections.blockers(biz, sms_configured),
-        is_live=is_live, live_verified=live_verified,
+        is_live=is_live, live_verified=live_verified, recommended=recommended,
         sms_configured=sms_configured,
         edit=request.args.get("edit"),
         saved=request.args.get("saved"),

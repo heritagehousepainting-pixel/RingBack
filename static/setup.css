@@ -71,3 +71,33 @@
 .setup-note{font-size:var(--text-sm);color:var(--ink-soft);margin:var(--space-2) 0 0}
 .setup-note.is-pending{color:var(--warning)}
 .setup-note.is-ok{color:var(--success)}
+
+/* ---- "Fully set up" tier: recommended connections (deep-link checklist) ---- */
+.setup-extra{margin-top:var(--space-8);padding-top:var(--space-6);border-top:1px solid var(--border)}
+.fs-head{margin-bottom:var(--space-4)}
+.fs-title{margin:0;font-size:var(--text-lg);font-weight:700;color:var(--ink)}
+.fs-sub{margin:var(--space-1) 0 0;font-size:var(--text-sm);color:var(--ink-soft)}
+/* segmented progress meter — N filled of total; no dynamic inline width needed */
+.fs-meter{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)}
+.fs-segs{flex:1 1 auto;display:flex;gap:var(--space-1)}
+.fs-seg{flex:1 1 0;height:6px;border-radius:var(--radius-pill);background:var(--surface-2)}
+.fs-seg.is-on{background:var(--success)}
+.fs-meter-label{flex:0 0 auto;font-size:var(--text-xs);font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.fs-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--space-2)}
+.fs-row{display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-6);
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow-card)}
+.fs-ico{flex:0 0 auto;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--radius-pill);border:1px solid var(--border-strong);color:var(--ink-soft)}
+.fs-row.is-done .fs-ico{background:var(--success-bg);border-color:var(--success);color:var(--success)}
+.fs-ico svg{width:14px;height:14px}
+.fs-row-text{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fs-row-title{font-size:var(--text-sm);font-weight:700;color:var(--ink)}
+.fs-row-value{font-size:var(--text-sm);color:var(--ink-soft)}
+.fs-row-state{flex:0 0 auto}
+.fs-row-cta{flex:0 0 auto;white-space:nowrap;min-height:44px}  /* ≥44px touch target */
+@media (max-width:560px){
+  .fs-row{flex-wrap:wrap;gap:var(--space-3)}
+  .fs-row-text{flex:1 1 60%}
+  .fs-row-cta{margin-left:auto}
+}

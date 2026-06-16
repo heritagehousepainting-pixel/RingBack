@@ -4,7 +4,7 @@
 {% from "components/ui/badge.html" import pill %}
 
 {% block title %}Go Live{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="/static/setup.css">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/setup.css?v=2">{% endblock %}
 {% block page_title %}Go Live{% endblock %}
 {% block page_sub %}<p class="page-sub">Connect your phone so {{ app_name }} texts back every missed call — no tech setup, we walk you through it.</p>{% endblock %}
 {% block header_actions %}{% if live_verified %}{{ pill('Live', 'booked', dot=true) }}{% elif is_live %}{{ pill('Almost', 'warning', dot=true) }}{% endif %}{% endblock %}
@@ -215,6 +215,44 @@
     </li>
     {% endfor %}
   </ol>
+
+  {# ---- "Fully set up" tier: recommended connections beyond go-live. Skippable, and
+         deliberately separate from the Live banner above — these never change whether
+         you're live. Each row deep-links into its existing Settings card. ---- #}
+  {% if recommended and recommended['items'] %}
+  <section class="setup-extra" aria-labelledby="fs-title">
+    <div class="fs-head">
+      <h2 class="fs-title" id="fs-title">Get the most out of {{ app_name }}</h2>
+      <p class="fs-sub">Optional — connecting these lets {{ app_name }} book estimates, alert you, and remember every caller.</p>
+    </div>
+    <div class="fs-meter">
+      <span class="fs-segs" aria-hidden="true">
+        {% for i in range(recommended.total) %}<span class="fs-seg{{ ' is-on' if i < recommended.done else '' }}"></span>{% endfor %}
+      </span>
+      <span class="fs-meter-label">{{ recommended.done }} of {{ recommended.total }} set up</span>
+    </div>
+    <ul class="fs-list">
+      {% for it in recommended['items'] %}
+      <li class="fs-row{{ ' is-done' if it.done else '' }}">
+        <span class="fs-ico" aria-hidden="true">
+          {%- if it.done -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          {%- else -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/></svg>{%- endif -%}
+        </span>
+        <span class="fs-row-text">
+          <span class="fs-row-title">{{ it.title }}</span>
+          <span class="fs-row-value">{{ it.value }}</span>
+        </span>
+        <span class="fs-row-state">
+          {%- if it.done -%}{{ pill('Done', 'booked', dot=true) }}
+          {%- elif it.optional -%}{{ pill('Optional', 'neutral') }}
+          {%- else -%}{{ pill('Recommended', 'new') }}{%- endif -%}
+        </span>
+        <a class="btn btn-secondary btn-sm fs-row-cta" href="{{ it.href }}">{{ 'Manage' if it.done else it.cta }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 
 </div>
 {% endblock %}

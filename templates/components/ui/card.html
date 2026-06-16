@@ -2,8 +2,8 @@
      {% call card(title='Leads', actions=button('New', size='sm')) %} ...body... {% endcall %}
    `actions` takes raw markup (e.g. a button() call). `flush` removes body padding
    (for tables). `footer` takes raw markup for a footer bar. #}
-{% macro card(title=None, subtitle=None, actions=None, footer=None, flush=False, extra='') -%}
-<div class="card{{ (' ' ~ extra) if extra else '' }}">
+{% macro card(title=None, subtitle=None, actions=None, footer=None, flush=False, extra='', anchor='') -%}
+<div class="card{{ (' ' ~ extra) if extra else '' }}"{% if anchor %} id="{{ anchor }}"{% endif %}>
   {%- if title or subtitle or actions -%}
   <div class="card-head">
     <div class="card-head-text">

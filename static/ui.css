@@ -102,6 +102,12 @@ textarea.field-control{min-height:96px;line-height:1.5;resize:vertical}
 .card-body{padding:var(--space-6)}
 .card-body.is-flush{padding:0}
 .card-foot{padding:var(--space-3) var(--space-6);border-top:1px solid var(--border);background:var(--bg)}
+/* Deep-linked card (e.g. from the /setup checklist): clear the header on scroll and
+   ring the card the wizard sent you to. box-shadow only (no reflow); persists while the
+   hash matches, so it's reduced-motion-safe with no keyframes. */
+.card[id]{scroll-margin-top:var(--space-12);transition:box-shadow .2s ease}
+/* Solid accent (not the 28%-opacity --accent-ring) so the landing indicator clears 3:1. */
+.card[id]:target{box-shadow:0 0 0 2px var(--accent)}
 
 /* ============================================================================
    DataTable — uppercase faint headers, row hover, consistent padding

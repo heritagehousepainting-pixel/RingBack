@@ -546,6 +546,46 @@ check("golive: not_live done < total", g_nl["done"] < g_nl["total"])
 check("dashboard renders with golive context", client.get("/dashboard").status_code == 200)
 
 
+# ====================== Fully-set-up tier (recommended connections) ======================
+# Pure status aggregation with dependency-injected signals; must never touch the live tier.
+rec_empty = connections.recommended_setup({}, ai_default="DEFAULT")
+check("recommended: exposes 9 items", len(rec_empty["items"]) == 9)
+check("recommended: total counts all items", rec_empty["total"] == 9)
+check("recommended: nothing configured -> done 0", rec_empty["done"] == 0)
+check("recommended: items carry key/title/href/cta/done/optional",
+      all(set(it) >= {"key", "title", "href", "cta", "done", "optional"} for it in rec_empty["items"]))
+check("recommended: every row deep-links somewhere", all(it["href"] for it in rec_empty["items"]))
+
+biz_cfg = {"ai_instructions": "Talk like a pro", "alert_sms": "+12150000000",
+           "screen_mode": "enforce", "reminders_enabled": 1, "voice_callback_enabled": 1,
+           "estimate_times": "9:00 AM"}
+rec_cfg = connections.recommended_setup(biz_cfg, calendar_connected=True,
+                                        contacts_connected=True, password_changed=True,
+                                        ai_default="DEFAULT")
+done_keys = {it["key"] for it in rec_cfg["items"] if it["done"]}
+check("recommended: all nine detect done when configured", rec_cfg["done"] == 9)
+check("recommended: calendar/contacts/password done from injected signals",
+      {"calendar", "contacts", "password"} <= done_keys)
+
+# Honest: the untouched default AI instructions do NOT count as "taught your AI".
+rec_default_ai = connections.recommended_setup({"ai_instructions": "DEFAULT"}, ai_default="DEFAULT")
+check("recommended: default AI instructions are NOT 'done'",
+      not any(it["key"] == "ai" and it["done"] for it in rec_default_ai["items"]))
+
+# ISOLATION: a fully-recommended business with no bound number is still NOT live.
+not_live_biz = {"name": "X", "ein": "12-3456789", "business_address": "123 St"}
+fully_rec = connections.recommended_setup(not_live_biz, calendar_connected=True,
+                                          contacts_connected=True, password_changed=True)
+check("recommended: never flips a unbound business to live",
+      connections.is_live(not_live_biz, True) is False and fully_rec["done"] >= 3)
+
+# The /setup route renders the recommended section + meter alongside the live stepper.
+db.set_a2p_status(1, "approved")   # avoid the on-view Twilio a2p_sync (network) in this render check
+r_setup = client.get("/setup")
+check("setup page renders the 'fully set up' section", b"Get the most out of" in r_setup.data)
+check("setup page shows the recommended meter", b"fs-meter" in r_setup.data and b"set up" in r_setup.data)
+
+
 print(f"\n{_pass} passed, {_fail} failed")
 try:
     os.unlink(_TMP.name)

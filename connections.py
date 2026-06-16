@@ -129,6 +129,39 @@ def golive_summary(business, sms_configured=None):
     }
 
 
+# ---- "Fully set up" tier: recommended connections beyond go-live ----
+# Status-only aggregation for the wizard's checklist. These make RingBack better but
+# NEVER gate "live" -- golive_summary owns that, and is left untouched. The wizard
+# renders this as a deep-link checklist into the existing Settings forms (no new write
+# paths). Signals that need request/auth context (calendar/contacts connection, whether
+# the password was changed off the seed) are dependency-injected by the route, mirroring
+# how golive_summary takes sms_configured -- so this stays pure and unit-testable.
+def recommended_setup(business, *, calendar_connected=False, contacts_connected=False,
+                      password_changed=False, ai_default=""):
+    """The recommended-connections checklist (the "Fully set up" tier). Returns
+    {items: [{key,title,value,done,optional,href,cta}], done, total}. `optional` marks
+    genuine add-ons (voice/scheduling/contacts) so the meter doesn't read as broken when
+    they're off. `total`/`done` count ALL items; the live tier is computed elsewhere."""
+    biz = (business if isinstance(business, dict) else db.get_business(business)) or {}
+    ai = (biz.get("ai_instructions") or "").strip()
+    ai_done = bool(ai) and ai != (ai_default or "").strip()
+    rows = [
+        # key          title                        value (one-liner)                                       done                  optional href                              cta
+        ("ai",         "Teach your AI",             "How it talks and what it asks on every call",          ai_done,              False, "/settings#set-ai",              "Edit"),
+        ("calendar",   "Connect your calendar",     "Booked estimates sync; it avoids your busy times",     calendar_connected,   False, "/settings#set-calendar",        "Connect"),
+        ("alerts",     "Owner alerts",              "Get pinged the moment a lead or booking lands",        bool(biz.get("alert_email") or biz.get("alert_sms")), False, "/settings#set-alerts", "Set up"),
+        ("screening",  "Call screening",            "Decide who gets a text back",                          bool(biz.get("screen_mode")), False, "/settings#set-screening", "Choose"),
+        ("reminders",  "Reminders & follow-ups",    "Cut no-shows and revive quiet leads",                  bool(biz.get("reminders_enabled") or biz.get("followups_enabled")), False, "/settings#set-reminders", "Turn on"),
+        ("voice",      "AI voice callback",         "Let a caller reply CALL for a live AI call back",      bool(biz.get("voice_callback_enabled")), True, "/settings#set-voice", "Enable"),
+        ("scheduling", "Scheduling & availability", "Your work days, estimate windows, and buffer",         bool(biz.get("estimate_times") or biz.get("working_days") or biz.get("buffer_minutes")), True, "/settings#set-scheduling", "Adjust"),
+        ("contacts",   "Import your contacts",      "So the screen recognizes people you already know",     contacts_connected,   True,  "/api/contacts/google/connect",  "Connect"),
+        ("password",   "Set your own password",     "Move off the starter password",                        password_changed,     False, "/settings#set-password",        "Change"),
+    ]
+    items = [{"key": k, "title": t, "value": v, "done": bool(d), "optional": o,
+              "href": h, "cta": c} for (k, t, v, d, o, h, c) in rows]
+    return {"items": items, "done": sum(1 for it in items if it["done"]), "total": len(items)}
+
+
 def default_area_code(biz):
     """A sensible area-code guess to pre-fill number search: the digits of the
     business's existing phone, else ''."""
