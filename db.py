@@ -1985,3 +1985,14 @@ def mark_coach_offered(business_id, convo_id):
         (business_id, convo_id, None, "coach_offered", "", now_iso()))
     conn.commit()
     conn.close()
+
+
+def all_owner_recipients():
+    """(business_id, owner_email) for every tenant -- the weekly-digest cron's mailing list.
+    RingBack stores the owner's contact email in alert_email; falls back to the login email."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT u.business_id AS bid, COALESCE(NULLIF(b.alert_email,''), u.email) AS email "
+        "FROM users u JOIN businesses b ON b.id = u.business_id").fetchall()
+    conn.close()
+    return [(r["bid"], r["email"]) for r in rows if r["email"]]

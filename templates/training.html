@@ -8,9 +8,12 @@
 
 {% block content %}
 {% if request.args.get('taught') %}<p class="provider-note provider-note-ok">Got it. RingBack learned that and will use it from now on.</p>{% endif %}
+{% set _dg = request.args.get('digest') %}
+{% if _dg == 'sent' %}<p class="provider-note provider-note-ok">Emailed your digest.</p>{% elif _dg == 'simulated' %}<p class="provider-note provider-note-soft">Digest prepared (simulated). Set up SMTP to actually email it.</p>{% elif _dg %}<p class="provider-note provider-note-err">Couldn't email the digest just now.</p>{% endif %}
 
 <div class="settings-col">
-  {% if digest and digest.has_content %}<p class="provider-note provider-note-soft">{{ digest.line }} Over the last {{ digest.days }} days across {{ digest.convos }} conversation(s).</p>{% endif %}
+  {% if digest and digest.has_content %}<p class="provider-note provider-note-soft" style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-3)"><span>{{ digest.line }} Over the last {{ digest.days }} days across {{ digest.convos }} conversation(s).</span>
+    <form method="post" action="/digest/send" style="margin:0"><button class="btn btn-secondary btn-sm" type="submit">Email me this</button></form></p>{% endif %}
 
   {% if top_unmet %}
   {% call card(title='Build these next', subtitle="The requests RingBack couldn't handle, most frequent first. Teach it below, or build the tool.") %}

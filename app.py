@@ -54,6 +54,8 @@ db.init_db()
 # taught corrections before the brain, and folds them into its routing prompt.
 assistant._learning_lookup = convos.lookup
 assistant._learning_examples_hook = convos.learnings_for_prompt
+# When a gap recurs, let the assistant check if a real tool now fits it (proactive self-teaching).
+convos._tool_suggest_hook = assistant.suggest_tool_for
 
 # Seed an owner login for "client zero" (business 1) on first run so the existing
 # demo data is reachable immediately. Change the password after first login.
@@ -504,6 +506,32 @@ def training_resolve():
     if flag_id and flag_id.isdigit():
         db.resolve_flag(biz["id"], int(flag_id))
     return redirect("/training")
+
+
+@app.route("/digest/send", methods=["POST"])
+@login_required
+def digest_send():
+    """Email this owner their weekly digest now (gated/simulated until SMTP is set)."""
+    biz = current_business()
+    user = current_user()
+    em = convos.digest_email(biz)
+    res = mail.send_email(user["email"], em["subject"], em["body"])
+    return redirect(f"/training?digest={res['status']}")
+
+
+@app.route("/tasks/digest", methods=["POST"])
+def tasks_digest():
+    """The weekly-digest cron: email every tenant's owner. Locked behind the tasks secret
+    (X-Tasks-Secret header), like /tasks/run-due; a scheduler hits this once a week."""
+    sent_secret = request.headers.get("X-Tasks-Secret", "")
+    if not TASKS_SECRET or not secrets.compare_digest(sent_secret, TASKS_SECRET):
+        return jsonify(error="Forbidden."), 403
+    n = 0
+    for bid, email in db.all_owner_recipients():
+        em = convos.digest_email(db.get_business(bid))
+        mail.send_email(email, em["subject"], em["body"])
+        n += 1
+    return jsonify({"sent": n})
 
 
 @app.route("/analytics")

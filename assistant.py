@@ -393,6 +393,31 @@ def _llm_route(business, message, history):
     return None
 
 
+def suggest_tool_for(message):
+    """Given a request the assistant fell back on (a recurring gap), ask the brain whether
+    ONE existing tool would genuinely satisfy it. Returns a tool name only on high
+    confidence, else None. Powers the proactive 'I think I can actually do that now' offer."""
+    provider = ai._active_provider()
+    if provider not in ("claude", "minimax"):
+        return None
+    system = (
+        "An assistant could not handle a request and fell back to pointing the owner at a "
+        "page. Decide if ONE of the existing tools below would ACTUALLY do what the owner "
+        "asked. Be conservative: only name a tool if you are confident it FULLY satisfies "
+        "the request; otherwise say none.\nTOOLS:\n" + _tool_catalog() + "\n"
+        'Reply with ONLY a JSON object: {"tool":"<exact tool name or none>","confidence":"high|low"}.')
+    user = f"OWNER REQUEST: {message}\n\nReturn the JSON now."
+    try:
+        raw = ai._strip_think(ai._llm_complete(provider, system, user))
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        d = json.loads(m.group(0)) if m else {}
+        if d.get("tool") in TOOLS and d.get("confidence") == "high":
+            return d["tool"]
+    except Exception:
+        return None
+    return None
+
+
 def _demo_route(message):
     t = message.lower().strip()
     args = {"raw": message}

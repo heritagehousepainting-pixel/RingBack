@@ -192,6 +192,22 @@ def coach_offer(business_id, convo_id, message):
         return None
     top = sorted(cands, key=lambda x: -x["count"])[0]
     db.mark_coach_offered(business_id, convo_id)
+    # If the brain is confident an existing TOOL would actually satisfy this, offer to run
+    # it (a real upgrade); otherwise offer to remember the route Mason already takes.
+    tool = None
+    suggest = globals().get("_tool_suggest_hook")
+    if suggest:
+        try:
+            tool = suggest(top["sample"])
+        except Exception:
+            tool = None
+    if tool:
+        return {
+            "pattern": top["sample"], "action": tool, "value": "", "count": top["count"],
+            "prompt": (f'I noticed you have asked things like "{top["sample"]}" {top["count"]} '
+                       f'times. I think I can actually do that now. Want me to run "{tool}" '
+                       "whenever you say it."),
+        }
     return {
         "pattern": top["sample"], "action": "route", "value": top["route"],
         "count": top["count"],
@@ -275,6 +291,24 @@ def top_unmet(business_id, limit=5):
         g = groups.setdefault(key, {"sample": content, "count": 0})
         g["count"] += 1
     return sorted(groups.values(), key=lambda x: -x["count"])[:limit]
+
+
+def digest_email(business, days=7):
+    """Build the weekly digest email ({subject, body}) for a business: the activity summary
+    plus the ranked 'build/teach next' list, so the queue reaches the owner's inbox."""
+    bid = business["id"]
+    d = digest(bid, days)
+    unmet = top_unmet(bid)
+    name = business.get("name") or "your business"
+    lines = [f"Here is your weekly Mason digest for {name}.", ""]
+    lines.append(d["line"] or "A quiet week. No gaps and nothing new to teach.")
+    lines.append(f"Conversations this week: {d['convos']}. Things I learned: {d['learnings']}.")
+    if unmet:
+        lines += ["", "Top requests to teach me or build next:"]
+        lines += [f'  {i + 1}. "{u["sample"]}" ({u["count"]}x)' for i, u in enumerate(unmet)]
+    lines += ["", "Open Mason's Memory to teach or review what I missed."]
+    return {"subject": f"Your weekly Mason digest: {d['gaps']} gap(s), {d['learnings']} learned",
+            "body": "\n".join(lines)}
 
 
 def learnings_for_prompt(business_id, limit=6):

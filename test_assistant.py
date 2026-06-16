@@ -181,6 +181,52 @@ check("the command center surfaces the digest line",
 check("the training page ranks what to build next",
       (not _tu) or b"Build these next" in client.get("/training").data)
 
+# Proactive teaching: after a recurring gap, the assistant offers to remember the route.
+_o1 = assistant.run(biz, "how do I change my AI instructions")
+_cv.record_exchange(1, "coachk", "how do I change my AI instructions", _o1)
+_o2 = assistant.run(biz, "how do I change my AI instructions")
+_cid, _ = _cv.record_exchange(1, "coachk", "how do I change my AI instructions", _o2)
+_offer = _cv.coach_offer(1, _cid, "thanks, that's all")
+check("the assistant proactively offers to remember a recurring gap",
+      bool(_offer) and _offer["action"] == "route" and _offer["value"] == "/settings"
+      and _offer["count"] >= 2)
+check("it offers at most once per conversation",
+      _cv.coach_offer(1, _cid, "thanks again") is None)
+r = client.post("/assistant/learn",
+                data={"pattern": _offer["pattern"], "action": "route", "value": _offer["value"]})
+check("accepting the offer teaches the route", r.status_code == 200 and r.get_json()["ok"])
+_o3 = assistant.run(biz, "how do I change my AI instructions")
+check("the self-taught route is now honored deterministically",
+      _o3.get("meta", {}).get("status") == "learned"
+      and any(c.get("href") == "/settings" for c in _o3.get("cards", [])))
+
+# Tool-mapping offer: when the brain is confident a tool fits, it is offered over the route.
+_s1 = assistant.run(biz, "update my service area")
+_cv.record_exchange(1, "toolk", "update my service area", _s1)
+_s2 = assistant.run(biz, "update my service area")
+_scid, _ = _cv.record_exchange(1, "toolk", "update my service area", _s2)
+_oh = getattr(_cv, "_tool_suggest_hook", None)
+_cv._tool_suggest_hook = lambda m: "get_stats"          # stub a confident verdict
+_toffer = _cv.coach_offer(1, _scid, "thanks bye")
+check("a confident tool mapping is offered over a route",
+      bool(_toffer) and _toffer["action"] == "get_stats")
+_cv._tool_suggest_hook = _oh
+
+# Emailed weekly digest: builder + per-owner send + the secret-gated cron.
+_em = _cv.digest_email(db.get_business(1))
+check("the digest email has a subject and body",
+      bool(_em["subject"]) and "digest" in _em["body"].lower())
+r = client.post("/digest/send", data={})
+check("emailing the digest goes through the gated seam (simulated until SMTP)",
+      r.status_code == 302 and "digest=" in r.headers["Location"])
+import app as _appmod
+_appmod.TASKS_SECRET = "smoke-secret"
+r = client.post("/tasks/digest", headers={"X-Tasks-Secret": "smoke-secret"})
+check("the weekly digest cron (secret-gated) emails owners",
+      r.status_code == 200 and r.get_json()["sent"] >= 1)
+check("the digest cron rejects a missing secret",
+      client.post("/tasks/digest").status_code == 403)
+
 print(f"\n{_pass} passed, {_fail} failed")
 try:
     os.unlink(_TMP.name)
