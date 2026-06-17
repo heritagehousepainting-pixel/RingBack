@@ -266,12 +266,18 @@ def start_ticker():
     interval = max(5, int(TICK_SECONDS))
 
     def _loop():
+        # Sleep BEFORE the first tick. tick_once() touches the DB and may send due
+        # reminders/follow-ups (a slow/hanging Twilio call), holding the DB; doing that
+        # at boot can block the web worker's first request (the /login health check reads
+        # the DB via inject_globals), so Render's port scan never sees the worker and the
+        # deploy fails ("No open HTTP ports"). Delaying the first tick lets the worker
+        # become ready and answer the health check first. See reference-ringback-wal-boot-hazard.
         while True:
+            time.sleep(interval)
             try:
                 tick_once()
             except Exception as e:  # never let the scheduler thread die
                 print(f"[ringback] scheduler tick failed: {e}", file=sys.stderr, flush=True)
-            time.sleep(interval)
 
     threading.Thread(target=_loop, daemon=True, name="ringback-ticker").start()
     print(f"[ringback] reminder scheduler started (every {interval}s)",
