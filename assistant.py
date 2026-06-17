@@ -1079,6 +1079,28 @@ def _h_dismiss_chaperone(business, args):
             "cards": [_note("Setup guidance paused.", "info")]}
 
 
+# The in-chat setup steps that, once saved, should flow straight into the next step.
+_CHAPERONE_TOOLS = {"set_avg_job_value", "set_profile", "set_alerts"}
+
+
+def _chaperone_continue(business, tool, result):
+    """After an in-chat setup step is saved, lead straight into the next one instead of leaving
+    the owner on a dead-end "Done." Same gating as the proactive trigger: only while they still
+    need setup and haven't paused it. They can still say "not now" to stop."""
+    if tool not in _CHAPERONE_TOOLS or not _needs_chaperone(business):
+        return result
+    biz = db.get_business(business["id"]) or business
+    golive = connections.golive_summary(biz)
+    nxt = connections.chaperone_next_step(biz, golive, google_cal.is_connected(biz["id"]))
+    if nxt is None:
+        return result
+    reply, cards = _chaperone_step_view(biz, nxt, golive)
+    result["reply"] = (result.get("reply") or "").rstrip() + "\n\n" + reply
+    result["cards"] = list(result.get("cards") or []) + list(cards) + [
+        _note("Say \"not now\" to pause setup any time.", "info")]
+    return result
+
+
 def _trim_profile_value(val):
     """A free-text profile value captured to end-of-line: cut a trailing clause that starts
     another field ("... and my EIN is ...", "..., my business name is ..."), strip punctuation,
@@ -2167,8 +2189,9 @@ def execute(business, tool, args):
                 "pending_action": None, "meta": {"tool": tool, "status": "error"}}
     out = spec["fn"](business, _clean_args(tool, args or {}))
     cards = out.get("cards", [])
-    return {"reply": out.get("reply", "Done."), "cards": cards, "pending_action": None,
-            "meta": {"tool": tool, "status": "ok" if cards else "empty"}}
+    result = {"reply": out.get("reply", "Done."), "cards": cards, "pending_action": None,
+              "meta": {"tool": tool, "status": "ok" if cards else "empty"}}
+    return _chaperone_continue(business, tool, result)
 
 
 def suggestions():

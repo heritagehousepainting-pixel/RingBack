@@ -58,7 +58,11 @@ check("the chaperone offers a 'not now' dismiss",
 # ---------------------------------------------------------------------------
 # Advance off real state
 # ---------------------------------------------------------------------------
-assistant.execute(db.get_business(1), "set_avg_job_value", {"value": "2400"})
+res = assistant.execute(db.get_business(1), "set_avg_job_value", {"value": "2400"})
+# Continuity: completing an in-chat step must lead STRAIGHT into the next one, not leave the
+# owner hanging on "Done." (the gap the owner hit live).
+check("chaperone continuity: finishing a step leads into the next (no hanging)",
+      any(w in res["reply"].lower() for w in ("business info", "ein", "address")))
 out = assistant.run(db.get_business(1), "help me get set up")
 check("after the value is saved, the next step is the business profile",
       any(w in out["reply"].lower() for w in ("ein", "business name", "address", "business info")))
