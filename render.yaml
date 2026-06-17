@@ -9,8 +9,11 @@
 # a background scheduler. Render gives all three; serverless hosts don't.
 
 services:
+  # STAGING service (deployed from the `staging` branch). Named distinctly from the live
+  # `ringback` prod service so the Blueprint creates a SEPARATE service + disk and never
+  # touches production. When promoting staging -> prod, reconcile this name back to `ringback`.
   - type: web
-    name: ringback
+    name: ringbackv2
     runtime: python
     plan: starter                 # ~$7/mo, always-on (the free plan sleeps + has no disk)
     buildCommand: pip install -r requirements.txt
@@ -18,7 +21,7 @@ services:
     # writer; threads handle request concurrency. Ample for a single business.
     startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT
     disk:
-      name: ringback-data
+      name: ringbackv2-data       # separate disk from prod's ringback-data (isolated staging DB)
       mountPath: /var/data        # durable disk: holds the DB BACKUP (plain file copies only)
       sizeGB: 1
     healthCheckPath: /login
