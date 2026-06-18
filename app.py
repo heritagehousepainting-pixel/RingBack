@@ -1168,7 +1168,12 @@ def setup_forwarding():
     """Confirm how missed calls reach FirstBack. Default = the catcher model: the owner
     sets carrier conditional-forwarding on their own phone (forward_to stays BLANK, so
     any inbound call is treated as already-missed -> instant text-back). Advanced =
-    dial-through: FirstBack rings the owner's cell first, then texts if unanswered."""
+    dial-through: FirstBack rings the owner's cell first, then texts if unanswered.
+
+    SF-7: when in dial mode AND Twilio is configured, fire a sentinel call to verify
+    forwarding is live. forwarding_confirmed is intentionally left False here; it is
+    set True ONLY when the sentinel call arrives inbound (twilio_voice_inbound).
+    [DECIDED] Honesty rule: never set confirmed=True on 'placed'."""
     biz = current_business()
     if biz is None:
         return redirect("/dashboard")
@@ -1179,10 +1184,35 @@ def setup_forwarding():
         if not canonical:
             return redirect("/setup?err=forward")
         db.update_phone_voice(biz["id"], forward_to=canonical)
+        # SF-7: fire the sentinel to verify forwarding; leave confirmed=False.
+        if messaging.configured():
+            sentinel_result = connections.send_sentinel_call(biz["id"])
+            if sentinel_result.get("status") == "placed":
+                # Leave confirmed=0; the inbound webhook confirms it.
+                return redirect("/setup?saved=forwarding&verifying=1")
+            # DEV/LOCAL FALLBACK (clearly labelled): Twilio not configured or no
+            # public URL -> sentinel cannot be placed. Confirm manually so local
+            # dev still works; this branch is unreachable on production.
+            db.set_forwarding_confirmed(biz["id"], True)
+        else:
+            # Twilio not configured (local dev) -> manual fallback confirm.
+            db.set_forwarding_confirmed(biz["id"], True)
     else:
         db.update_phone_voice(biz["id"], forward_to="")   # catcher: blank = text immediately
-    db.set_forwarding_confirmed(biz["id"], True)
+        # Catcher mode: no sentinel needed; the owner dialed the carrier star code.
+        db.set_forwarding_confirmed(biz["id"], True)
     return redirect("/setup?saved=forwarding")
+
+
+# ---- SF-7: Sentinel TwiML (POST, Twilio-signed) ----
+@app.route("/webhooks/twilio/voice/sentinel-twiml", methods=["POST"])
+@require_twilio_signature
+def twilio_sentinel_twiml():
+    """TwiML served to Twilio when it dials the owner's phone as a sentinel probe.
+    A brief message + Hangup so the owner hears almost nothing and the call ends.
+    The real confirmation happens in twilio_voice_inbound when this call rings back
+    to the FirstBack number via the carrier's call-forwarding."""
+    return _twiml("<Response><Say>Forwarding verified.</Say><Hangup/></Response>")
 
 
 # ---- Design-system gallery (internal): renders every UI component + state ----
@@ -1494,11 +1524,16 @@ def google_disconnect():
 def api_cancel_appointment(appt_id):
     """Owner-initiated cancel from the dashboard. Frees the slot + cancels its
     reminders (db.cancel_appointment), then texts the customer a heads-up (simulated
-    until Twilio, recorded on the thread). Scoped to the owner's business."""
+    until Twilio, recorded on the thread). F04: also cancels the Google Calendar event
+    asynchronously when one was created. Scoped to the owner's business."""
     biz = current_business()
     appt = db.cancel_appointment(biz["id"], appt_id)
     if not appt:
         return jsonify(error="Appointment not found."), 404
+    # F04: cancel the Google Calendar event if one was created for this appointment.
+    google_event_id = appt.get("google_event_id")
+    if google_event_id and google_cal.is_connected(biz["id"]):
+        google_cal.cancel_event_async(biz["id"], google_event_id)
     when = fmt_slot_when(appt.get("day"), appt.get("slot_time")) or appt.get("scheduled_for") or "your estimate"
     lead = db.get_lead(appt["lead_id"], biz["id"])
     if lead and (lead.get("phone") or "").strip():
@@ -1960,10 +1995,22 @@ def _missed_call_textback(biz, caller, call_sid="", dial_status=""):
 @require_twilio_signature
 def twilio_voice_inbound():
     """Inbound call to a FirstBack number: ring the contractor's cell; if there is
-    no cell on file, treat it as missed right away and text the caller back."""
+    no cell on file, treat it as missed right away and text the caller back.
+
+    SF-7: if this call's SID matches the stored forwarding sentinel SID, confirm
+    forwarding, clear the sentinel, record the probe, and hang up quietly. This is
+    THE ONLY place forwarding_confirmed is set True (honesty rule [DECIDED])."""
     biz = db.get_business_by_twilio_number(request.form.get("To", ""))
     if not biz:
         return _twiml("<Response><Reject/></Response>")
+    call_sid = request.form.get("CallSid", "")
+    # SF-7 sentinel match: this call is the forwarding probe returning home.
+    sentinel_sid = biz.get("forwarding_sentinel_sid")
+    if sentinel_sid and call_sid and call_sid == sentinel_sid:
+        db.set_forwarding_confirmed(biz["id"], True)
+        db.set_forwarding_sentinel(biz["id"], None, None)   # clear sentinel
+        db.set_forwarding_probe(biz["id"])                  # record probe time
+        return _twiml("<Response><Hangup/></Response>")
     forward = biz.get("forward_to")
     if forward:
         action = _public_base() + "/webhooks/twilio/voice/dial-status"
@@ -1971,7 +2018,7 @@ def twilio_voice_inbound():
             f'<Response><Dial answerOnBridge="true" timeout="18" action="{action}" '
             f'method="POST"><Number>{_xesc(forward)}</Number></Dial></Response>')
     engaged = _missed_call_textback(biz, request.form.get("From", ""),
-                                    request.form.get("CallSid", ""), "no-forward")
+                                    call_sid, "no-forward")
     if engaged:
         return _twiml("<Response><Say>Sorry we missed you. We just sent you a text "
                       "message. Goodbye.</Say><Hangup/></Response>")
