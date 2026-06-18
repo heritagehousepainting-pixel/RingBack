@@ -1815,11 +1815,16 @@ def get_call(call_id, business_id):
     return dict(row) if row else None
 
 
-def mark_call_engaged(call_id, lead_id=None):
-    """Flip a previously-screened call to engaged (the owner's dashboard override)."""
+def mark_call_engaged(call_id, lead_id=None, business_id=None):
+    """Flip a previously-screened call to engaged (the owner's dashboard override).
+    Scoped by business_id (defense-in-depth) when the caller supplies it."""
     conn = get_conn()
-    conn.execute("UPDATE calls SET engaged=1, lead_id=COALESCE(?, lead_id) WHERE id=?",
-                 (lead_id, call_id))
+    if business_id is None:
+        conn.execute("UPDATE calls SET engaged=1, lead_id=COALESCE(?, lead_id) WHERE id=?",
+                     (lead_id, call_id))
+    else:
+        conn.execute("UPDATE calls SET engaged=1, lead_id=COALESCE(?, lead_id) "
+                     "WHERE id=? AND business_id=?", (lead_id, call_id, business_id))
     conn.commit()
     conn.close()
 
@@ -1889,6 +1894,9 @@ def screening_stats(business_id, since=None):
         f"  SUM(CASE WHEN engaged=1 THEN 1 ELSE 0 END) AS engaged, "
         f"  SUM(CASE WHEN {suppress} AND screen_mode='enforce' THEN 1 ELSE 0 END) AS enforced, "
         f"  SUM(CASE WHEN {suppress} AND screen_mode='monitor' THEN 1 ELSE 0 END) AS would_screen, "
+        # Monitor-mode SPAM only (excludes known personal/vendor 'screened_contact'): the honest
+        # "robocallers we'd have blocked" count that drives graduation + the graduation alert.
+        f"  SUM(CASE WHEN screen_status='screened_spam' AND screen_mode='monitor' THEN 1 ELSE 0 END) AS would_screen_spam, "
         f"  COUNT(*) AS total "
         f"FROM calls WHERE {where}", args).fetchone()
     conn.close()

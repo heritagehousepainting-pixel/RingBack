@@ -532,14 +532,18 @@ def scan_screening_graduation(now=None):
                 continue
             # Check would_screen count since window start.
             stats = db.screening_stats(bid, since=window_start)
-            would_screen = stats.get("would_screen", 0)
-            if would_screen < SCREEN_GRADUATION_MIN_VERDICTS:
+            # Graduate on the count of would-have-blocked ROBOCALLERS only -- monitor-mode
+            # screened_spam. screened_contact (known personal/vendor the bot stays out of) is
+            # NOT a robocaller, so counting it would graduate prematurely + make the alert's
+            # "N robocallers" dishonest.
+            would_block = stats.get("would_screen_spam", 0)
+            if would_block < SCREEN_GRADUATION_MIN_VERDICTS:
                 continue
             # Conditions met: promote to enforce.
             db.promote_screening(bid)
             # Refresh business row so alerts reads the updated screen_mode.
             biz_updated = db.get_business(bid)
-            alerts.notify(biz_updated, "screening_graduated", {"n": would_screen})
+            alerts.notify(biz_updated, "screening_graduated", {"n": would_block})
             promoted += 1
         except Exception as e:
             print(f"[firstback] screening graduation failed (biz {biz.get('id')}): {e}",

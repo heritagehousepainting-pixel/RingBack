@@ -457,6 +457,36 @@ for col in ("screening_window_start", "screening_false_positives",
     check(f"businesses has column '{col}'", col in cols)
 
 
+# ─── Regression (audit P1-B): only screened_spam ("robocallers") graduates, NOT ─
+# screened_contact (known personal/vendor the bot stays out of). A business with many
+# known-contact screens but few real spam must NOT graduate, and the alert N must be
+# the spam-only count (honest "N robocallers").
+biz_contacts = _new_biz("ContactHeavy", window_start=_ago(days=10))
+_seed_calls(biz_contacts["id"], 15, status="screened_contact", mode="monitor")  # known contacts
+_seed_calls(biz_contacts["id"], 3, status="screened_spam", mode="monitor")      # only 3 spam
+import reminders as _rem
+_rem.scan_screening_graduation()
+check("does NOT graduate on screened_contact volume (only 3 real spam < 10)",
+      db.get_business(biz_contacts["id"])["screen_mode"] == "monitor")
+_stats = db.screening_stats(biz_contacts["id"])
+check("screening_stats exposes a spam-only would_screen_spam count",
+      _stats.get("would_screen_spam") == 3 and _stats.get("would_screen") == 18)
+
+# And a spam-heavy business graduates with the alert N = spam-only count.
+biz_spam = _new_biz("SpamHeavy", window_start=_ago(days=10))
+_seed_calls(biz_spam["id"], 4, status="screened_contact", mode="monitor")
+_seed_calls(biz_spam["id"], 11, status="screened_spam", mode="monitor")
+_rem.scan_screening_graduation()
+check("graduates on >=10 real spam regardless of contact volume",
+      db.get_business(biz_spam["id"])["screen_mode"] == "enforce")
+conn = db.get_conn()
+_body = conn.execute("SELECT body FROM alerts WHERE business_id=? AND kind='screening_graduated' "
+                     "ORDER BY id DESC LIMIT 1", (biz_spam["id"],)).fetchone()
+conn.close()
+check("graduation alert reports the spam-only count (11), not 15",
+      _body is not None and "11" in _body["body"] and "15" not in _body["body"])
+
+
 # ─── Final report ─────────────────────────────────────────────────────────────
 print(f"\nResult: {_pass} passed, {_fail} failed")
 if _fail:

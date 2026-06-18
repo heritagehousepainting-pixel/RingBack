@@ -85,9 +85,19 @@
   {% endcall %}
 
   {% call card(anchor='set-screening', title='Call screening', subtitle='Like your phone’s screen: FirstBack only texts back real prospects — it skips people you already know (they’re yours to handle) and suspected spam/robocallers. No setup, no contact import required.') %}
+    {% if screen_mode == 'enforce' %}
+    <div class="provider-note provider-note-soft" style="margin-bottom:var(--space-4)">
+      <strong>Screening is enforcing.</strong> FirstBack is now blocking the text-back to suspected spam/robocallers. Saw a real customer get skipped? Tap <strong>This was real</strong> on your dashboard — they’ll be saved as a customer and texted back.
+    </div>
+    {% elif screen_mode == 'off' %}
+    <div class="provider-note provider-note-soft" style="margin-bottom:var(--space-4)">
+      <strong>Screening is off.</strong> Every missed caller gets the text-back. Switch to <strong>Monitor</strong> or <strong>Enforce</strong> below to start screening spam/robocallers.
+    </div>
+    {% else %}
     <div class="provider-note provider-note-soft" style="margin-bottom:var(--space-4)">
       <strong>Screening is in monitor mode.</strong> FirstBack is watching and learning which callers it would skip — but is <em>not yet blocking anyone</em>. Every missed caller still gets the text-back. You can see what it would have screened on your dashboard, and switch to <strong>Enforce</strong> below when you’re ready.
     </div>
+    {% endif %}
     <div class="field">
       <label class="field-label" for="screen_mode">Screening mode</label>
       <select id="screen_mode" name="screen_mode" class="field-control">

@@ -779,7 +779,11 @@ def pipeline():
     # whether it has already promoted to enforce (screening_promoted_at set).
     _window_start = biz.get("screening_window_start")
     _grad_days = None
-    if _window_start and not biz.get("screening_promoted_at"):
+    # Only show the "Learning (Day N of 7)" card while actually observing in monitor mode --
+    # never alongside enforce (auto-promoted or set by hand), where "nothing is silenced yet"
+    # would contradict the live shield.
+    if (_window_start and not biz.get("screening_promoted_at")
+            and _effective_screen_mode(biz) == "monitor"):
         try:
             import datetime as _dt
             _ws = _dt.datetime.fromisoformat(_window_start)
@@ -1990,7 +1994,7 @@ def api_engage_screened_call(call_id):
     if not db.get_messages(lead["id"]):
         reply = open_conversation(biz, lead)    # records the thread + alerts the owner
         messaging.send_sms(biz, caller, reply)  # transmit (already recorded)
-    db.mark_call_engaged(call_id, lead["id"])
+    db.mark_call_engaged(call_id, lead["id"], business_id=biz["id"])
     return jsonify(ok=True, lead_id=lead["id"])
 
 
@@ -2019,7 +2023,7 @@ def api_rescue_screened_call(call_id):
     if not db.get_messages(lead["id"]):
         reply = open_conversation(biz, lead)    # records the thread + alerts the owner
         messaging.send_sms(biz, caller, reply)  # transmit (already recorded)
-    db.mark_call_engaged(call_id, lead["id"])
+    db.mark_call_engaged(call_id, lead["id"], business_id=biz["id"])
     return jsonify(ok=True, lead_id=lead["id"])
 
 
