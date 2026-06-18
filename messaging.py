@@ -66,7 +66,7 @@ def _alert_from_number(business):
 
 
 def send_sms(business, to, body, lead_id=None, status_callback=None, gate=True,
-             transactional=False):
+             transactional=True):
     """Send an SMS for a business, or simulate it when Twilio can't send.
 
     Returns a status dict whose "status" is one of:
@@ -102,14 +102,13 @@ def send_sms(business, to, body, lead_id=None, status_callback=None, gate=True,
         return {"status": "suppressed"}
 
     # Phase 1 C — SF-6: transmit-time quiet-hours backstop.
-    # Ad-hoc/growth sends (gate=True, i.e. customer-facing) must not fire during
-    # quiet hours even if the scheduled-reminder path already guards them.
-    # Owner alerts (gate=False) are exempt (they go to the contractor, not a consumer).
-    # Transactional immediate text-backs (the missed-call response) are called from the
-    # webhook with gate=True too, but they originate from the consumer's own call so
-    # they satisfy the solicited-response exemption — that path passes transactional=True.
-    # Default: gate=True + no transactional flag → non-transactional → check quiet hours.
-    if gate:
+    # Default is transactional=True (EXEMPT): the missed-call text-back, AI replies, and
+    # reminders are solicited responses / already quiet-hours-scheduled, so they send any time.
+    # Owner alerts (gate=False) skip this block entirely. The backstop's real job is to catch
+    # AD-HOC / GROWTH / MARKETING sends — those call sites MUST pass transactional=False to
+    # opt into the quiet-hours hold (returns "deferred", not "failed"). This prevents a 2am
+    # marketing blast while never silencing a legitimate transactional response.
+    if gate and not transactional:
         # Use the business's timezone when available, else the app-wide default.
         tz = None
         if isinstance(business, dict) and business.get("timezone"):

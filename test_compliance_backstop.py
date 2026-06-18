@@ -56,7 +56,8 @@ def check(name, cond):
 biz = db.get_business(1)
 
 # ============================================================
-# 1. send_sms during quiet hours → "deferred"
+# 1. NON-transactional (growth/marketing) send during quiet hours → "deferred".
+#    (Default sends are transactional=True and exempt; only marketing opts into the hold.)
 # ============================================================
 # Patch tc_messaging.quiet_blocked to always return True for this test.
 _orig_quiet_blocked = tc_messaging.quiet_blocked
@@ -67,7 +68,7 @@ import messaging as _msg_mod
 _orig_msg_quiet = _msg_mod.tc_messaging
 _msg_mod.tc_messaging = tc_messaging  # already the same object; patches are live
 
-result_deferred = messaging.send_sms(biz, "+15550001111", "Hello after hours")
+result_deferred = messaging.send_sms(biz, "+15550001111", "Marketing blast after hours", transactional=False)
 check("send_sms during quiet hours returns status='deferred'",
       result_deferred.get("status") == "deferred")
 check("send_sms deferred reason is 'quiet_hours'",
