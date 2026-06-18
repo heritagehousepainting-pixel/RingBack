@@ -13,6 +13,7 @@ import json
 import re
 import threading
 
+import compliance
 import db
 
 # Owner-pushback cues (normalized, no punctuation) -> a 'negative' flag.
@@ -295,6 +296,41 @@ def top_unmet(business_id, limit=5):
     return sorted(groups.values(), key=lambda x: -x["count"])[:limit]
 
 
+def _roi_block(business, days):
+    """Return an honest ROI paragraph for the digest, or None to omit entirely.
+
+    Only emits a dollar claim when compliance.a2p_ready is True (meaning texts
+    actually reached customers). When A2P is pending, returns an honest non-dollar
+    line instead. Revenue is always labeled an estimate -- never implies cash collected.
+    """
+    if compliance.a2p_ready(business):
+        try:
+            bid = business["id"]
+            ana = db.analytics(bid, days)
+            totals = ana.get("totals") or {}
+            leads = totals.get("leads") or 0
+            booked = totals.get("booked") or 0
+            revenue = totals.get("revenue") or 0
+            roi_multiple = ana.get("roi_multiple")
+            avg_source = ana.get("avg_source") or "industry_default"
+            source_label = ("your average job value"
+                            if avg_source == "owner"
+                            else "an industry estimate for your trade")
+            roi_str = f"{roi_multiple}x its cost; " if roi_multiple else ""
+            return (
+                f"This week FirstBack recovered {leads} missed calls and booked "
+                f"{booked} estimates -- an estimated ~${revenue:,} "
+                f"({roi_str}estimate based on {source_label})."
+            )
+        except Exception:
+            return None
+    else:
+        return (
+            "Your AI is answering calls; texting is still activating -- "
+            "ROI tracking starts once texting is live."
+        )
+
+
 def digest_email(business, days=7):
     """Build the weekly digest email ({subject, body}) for a business: the activity summary
     plus the ranked 'build/teach next' list, so the queue reaches the owner's inbox."""
@@ -302,14 +338,19 @@ def digest_email(business, days=7):
     d = digest(bid, days)
     unmet = top_unmet(bid)
     name = business.get("name") or "your business"
-    lines = [f"Here is your weekly Vic digest for {name}.", ""]
+    lines = [f"Here is your weekly FirstBack digest for {name}.", ""]
+    # ROI block -- prepended before the activity summary.
+    roi = _roi_block(business, days)
+    if roi:
+        lines.append(roi)
+        lines.append("")
     lines.append(d["line"] or "A quiet week. No gaps and nothing new to teach.")
     lines.append(f"Conversations this week: {d['convos']}. Things I learned: {d['learnings']}.")
     if unmet:
         lines += ["", "Top requests to teach me or build next:"]
         lines += [f'  {i + 1}. "{u["sample"]}" ({u["count"]}x)' for i, u in enumerate(unmet)]
-    lines += ["", "Open Vic's Memory to teach or review what I missed."]
-    return {"subject": f"Your weekly Vic digest: {d['gaps']} gap(s), {d['learnings']} learned",
+    lines += ["", "Open FirstBack's Memory to teach or review what I missed."]
+    return {"subject": f"Your weekly FirstBack digest: {d['gaps']} gap(s), {d['learnings']} learned",
             "body": "\n".join(lines)}
 
 

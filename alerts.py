@@ -27,7 +27,8 @@ import db
 import mail
 import messaging
 
-ALERT_KINDS = ("lead", "booking", "urgent", "canceled", "sms_fail", "forwarding_lost")
+ALERT_KINDS = ("lead", "booking", "urgent", "canceled", "sms_fail", "forwarding_lost",
+               "roi_milestone")
 # Collapse identical alerts (same business + event) within this many seconds.
 ALERT_DEDUPE_SECONDS = 120
 
@@ -35,7 +36,8 @@ ALERT_DEDUPE_SECONDS = 120
 # sms_fail and forwarding_lost ride the urgent toggle (operational alerts the owner needs).
 _TOGGLE_COL = {"lead": "alert_on_lead", "booking": "alert_on_booking",
                "urgent": "alert_on_urgent", "canceled": "alert_on_booking",
-               "sms_fail": "alert_on_urgent", "forwarding_lost": "alert_on_urgent"}
+               "sms_fail": "alert_on_urgent", "forwarding_lost": "alert_on_urgent",
+               "roi_milestone": "alert_on_roi_milestone"}
 _PLACEHOLDER_NAMES = {"", "new caller", "homeowner", "unknown", "the caller", "caller"}
 
 
@@ -55,7 +57,17 @@ def format_message(kind, context):
         return f"New lead: {who}{tail}{about}. Open FirstBack to reply."
     if kind == "booking":
         when = (context.get("when") or "").strip()
-        return f"Estimate booked: {who} for {when}.{tail}".rstrip()
+        base = f"Estimate booked: {who} for {when}.{tail}".rstrip()
+        # Show-Up-Prepared briefing: append job details when the lead has them.
+        address = (context.get("address") or "").strip()
+        project = (context.get("project") or "").strip()
+        summary = (context.get("summary") or "").strip()
+        parts = [p for p in (project, address, summary) if p]
+        if parts:
+            base += " Job: " + " - ".join(parts)
+        return base
+    if kind == "roi_milestone":
+        return context.get("body") or "FirstBack alert (roi_milestone)."
     if kind == "urgent":
         return f"Urgent: {who}{tail} needs attention. Open FirstBack."
     if kind == "canceled":
@@ -77,7 +89,8 @@ def _subject(kind):
             "urgent": "Urgent lead — FirstBack",
             "canceled": "Estimate canceled — FirstBack",
             "sms_fail": "SMS delivery failed — FirstBack",
-            "forwarding_lost": "Call forwarding issue — FirstBack"}.get(kind, "FirstBack alert")
+            "forwarding_lost": "Call forwarding issue — FirstBack",
+            "roi_milestone": "FirstBack paid for itself — FirstBack"}.get(kind, "FirstBack alert")
 
 
 def _enabled_for(business, kind):
