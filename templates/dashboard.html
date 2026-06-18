@@ -96,6 +96,20 @@
   {% endif %}
 {% endcall %}
 
+{% if screening_promoted_at %}
+<div class="review-nudge shield-active" role="status" style="cursor:default" id="spam-shield-card">
+  <span class="review-nudge-text"><strong>Spam Shield is active.</strong>
+  {{ screen_stats.enforced if screen_stats else 0 }} robocaller{{ 's' if (screen_stats and screen_stats.enforced != 1) else '' }} blocked
+  · {{ screening_false_positives or 0 }} false positive{{ 's' if screening_false_positives != 1 else '' }}.
+  <a href="/settings#set-screening">Pause in Settings.</a></span>
+</div>
+{% elif grad_day is not none %}
+<div class="review-nudge shield-learning" role="status" style="cursor:default" id="spam-shield-card">
+  <span class="review-nudge-text"><strong>Spam Shield: Learning (Day {{ grad_day }} of {{ grad_total }}).</strong>
+  Watching for {{ grad_total }} days before it can block automatically. Nothing is silenced yet.</span>
+</div>
+{% endif %}
+
 {% if screened %}
 {% set screened_subtitle = ('In monitor mode FirstBack still texts these callers — this is what it WOULD screen: a contact you’d handle yourself, or a suspected spam/robocaller. Wrong about one? Mark it spam to confirm.' if monitoring else 'Callers FirstBack didn’t text back — a known contact you handle yourself, or a suspected spam/robocaller. Was one actually a customer? Text them back.') %}
 {% call card(title=('Would screen' if monitoring else 'Screened calls'), subtitle=screened_subtitle, flush=true) %}
@@ -115,6 +129,9 @@
         {% if c.engaged %}
           {# Monitor candidate: we already texted them, so offer 'confirm it's spam' instead of an override. #}
           <button type="button" class="btn btn-ghost btn-sm screen-spam" data-id="{{ c.id }}" data-num="{{ c.from_number|phone }}" aria-label="Mark {{ c.from_number|phone }} as spam">Mark spam</button>
+        {% elif c.screen_status == 'screened_spam' %}
+          {# Enforced spam: it was silenced. Let the owner rescue a real caller (trusts them + defers graduation). #}
+          <button type="button" class="btn btn-ghost btn-sm screen-real" data-id="{{ c.id }}" data-num="{{ c.from_number|phone }}" aria-label="This was a real caller, text back {{ c.from_number|phone }}">This was real</button>
         {% else %}
           <button type="button" class="btn btn-ghost btn-sm screen-engage" data-id="{{ c.id }}" data-num="{{ c.from_number|phone }}" aria-label="Text back {{ c.from_number|phone }}">Text them back</button>
         {% endif %}

@@ -936,6 +936,29 @@ function addMeta(container, text) {
   });
 })();
 
+// ---------- Dashboard: "This was real" — rescue an enforced-spam caller ----------
+// Marks the number a trusted customer, defers auto-graduation (resets the observation
+// window), and texts them back. The false-positive signal that keeps graduation honest.
+(function () {
+  const buttons = document.querySelectorAll(".screen-real[data-id]");
+  if (!buttons.length) return;
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const num = btn.dataset.num || "this caller";
+      if (!window.confirm("Text " + num + " back? They’ll be saved as a customer and never screened again.")) return;
+      btn.disabled = true;
+      btn.textContent = "Texting…";
+      try {
+        await apiFetch("/api/calls/" + btn.dataset.id + "/real", { method: "POST" });
+        window.location.reload();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Try again";
+      }
+    });
+  });
+})();
+
 // ---------- Dashboard: confirm a caller is spam (blocks + feeds the cross-tenant ledger) ----------
 (function () {
   const buttons = document.querySelectorAll(".screen-spam[data-id]");

@@ -128,7 +128,33 @@
         {% endif %}
       </div>
     </div>
-    <p class="provider-note provider-note-soft">The free tiers above are always on. The two add-ons are extra layers you can switch on later — the screen works without them.</p>
+    <p class="provider-note provider-note-soft">The free tiers above are always on. The two add-ons are extra layers you can switch on later -- the screen works without them.</p>
+    {% if screen_sensitivity_presets %}
+    <div class="field" style="margin-top:var(--space-4)">
+      <label class="field-label">Sensitivity</label>
+      <p class="provider-note provider-note-soft" style="margin-bottom:var(--space-2)">Controls how aggressive spam blocking is. Conservative = fewer blocks, more certain; Aggressive = catches more, slightly higher chance of a false positive.</p>
+      <div class="radio-group">
+        {% for preset in screen_sensitivity_presets %}
+        <label class="radio-label">
+          <input type="radio" name="screen_sensitivity" value="{{ preset }}"{{ ' checked' if screen_sensitivity == preset else '' }}>
+          {{ preset|capitalize }}
+        </label>
+        {% endfor %}
+        <label class="radio-label">
+          <input type="radio" name="screen_sensitivity" value=""{{ ' checked' if not screen_sensitivity else '' }}>
+          Default
+        </label>
+      </div>
+    </div>
+    {% endif %}
+    {% if reputation_configured %}
+    <div class="toggle-list" style="margin-top:var(--space-3)">
+      {{ alert_toggle('reputation_enabled', 'Enable paid robocall reputation lookup for this business', reputation_enabled) }}
+    </div>
+    {% endif %}
+    <div class="toggle-list" style="margin-top:var(--space-2)">
+      {{ alert_toggle('screening_hold', 'Keep in monitor mode -- do not auto-promote to Enforce after 7 days', screening_hold) }}
+    </div>
   {% endcall %}
 
   {% call card(title='FirstBack calendar', subtitle='Open days fill with booked estimates. Block the days you’re already busy and the AI won’t offer them.', flush=true) %}

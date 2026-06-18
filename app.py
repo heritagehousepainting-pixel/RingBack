@@ -40,7 +40,7 @@ import google_contacts
 from config import (APP_NAME, TAGLINE, DEBUG, SECRET_KEY, TASKS_SECRET,
                     SESSION_COOKIE_SECURE, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD,
                     app_tz, VOICE_PUBLIC_URL, INTERNAL_SECRET,
-                    SCREEN_MODE, SCREEN_AI_CONTENT, SCREEN_SCORE_MID)
+                    SCREEN_MODE, SCREEN_AI_CONTENT, SCREEN_SCORE_MID, SCREEN_SCORE_HARD)
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -775,13 +775,31 @@ def pipeline():
         "booked": len([l for l in leads if l["status"] == "booked"]),
         "appointments": len(appts),
     }
+    # Spam Shield graduation state: how many days into the observation window, and
+    # whether it has already promoted to enforce (screening_promoted_at set).
+    _window_start = biz.get("screening_window_start")
+    _grad_days = None
+    if _window_start and not biz.get("screening_promoted_at"):
+        try:
+            import datetime as _dt
+            _ws = _dt.datetime.fromisoformat(_window_start)
+            # now_iso() is tz-aware; match awareness so the subtraction never raises.
+            _now = _dt.datetime.now(_ws.tzinfo) if _ws.tzinfo else _dt.datetime.utcnow()
+            _grad_days = max(0, (_now - _ws).days)
+        except Exception:
+            pass
+    _grad_total = getattr(config, "SCREEN_GRADUATION_DAYS", 7)
     return render_template("dashboard.html", leads=leads, appointments=appts, stats=stats,
                            alert_feed=db.recent_alerts(biz["id"], 8),
                            reminder_state=db.reminders_by_appointment(biz["id"]),
                            screened=db.recent_screened_calls(biz["id"], 8),
                            screen_stats=db.screening_stats(biz["id"]),
                            screen_mode=_effective_screen_mode(biz),
-                           review_count=db.count_pending_suggestions(biz["id"]))
+                           review_count=db.count_pending_suggestions(biz["id"]),
+                           screening_promoted_at=biz.get("screening_promoted_at"),
+                           screening_false_positives=biz.get("screening_false_positives") or 0,
+                           grad_day=_grad_days,
+                           grad_total=_grad_total)
 
 
 @app.route("/assistant", methods=["POST"])
@@ -1079,6 +1097,20 @@ def api_analytics():
     return jsonify(db.analytics(current_business()["id"], days))
 
 
+def _save_screening_prefs(business_id, screen_hard, screen_mid, reputation_enabled,
+                          screening_hold):
+    """Persist per-tenant screening tuning columns. These live on `businesses` but are
+    NOT in _BUSINESS_COLS (so a profile save never blanks them). Called from the settings
+    POST; uses db.get_conn() directly so no db.py edit is required for the UI slice."""
+    conn = db.get_conn()
+    conn.execute(
+        "UPDATE businesses SET screen_hard=?, screen_mid=?, "
+        "reputation_enabled=?, screening_hold=? WHERE id=?",
+        (screen_hard, screen_mid, reputation_enabled, screening_hold, business_id))
+    conn.commit()
+    conn.close()
+
+
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
@@ -1123,7 +1155,29 @@ def settings():
             voice_callback_enabled=1 if request.form.get("voice_callback_enabled") else 0)
         # Per-business screening mode: blank/"default" -> NULL (inherit the app default).
         db.set_screen_mode(biz["id"], (request.form.get("screen_mode") or "").strip())
+        # Sensitivity preset: radio -> (screen_hard, screen_mid) stored per-tenant.
+        # Blank/unknown preset -> NULL (inherit the config-level defaults).
+        sensitivity = (request.form.get("screen_sensitivity") or "").strip()
+        presets = getattr(config, "SCREEN_SENSITIVITY_PRESETS", {})
+        if sensitivity in presets:
+            hard_val, mid_val = presets[sensitivity]
+        else:
+            hard_val, mid_val = None, None
+        # Per-tenant reputation lookup toggle (paid tier opt-in, defaults off).
+        rep_enabled = 1 if request.form.get("reputation_enabled") else 0
+        # Keep-in-observe: defer auto-graduation even after 7-day window passes.
+        hold = 1 if request.form.get("screening_hold") else 0
+        _save_screening_prefs(biz["id"], hard_val, mid_val, rep_enabled, hold)
         return redirect("/settings?saved=1")
+    _presets = getattr(config, "SCREEN_SENSITIVITY_PRESETS", {})
+    # Reverse-map current screen_hard/screen_mid back to the preset name for the radio.
+    _cur_hard = biz.get("screen_hard")
+    _cur_mid = biz.get("screen_mid")
+    _cur_preset = ""
+    for _name, (_h, _m) in _presets.items():
+        if _cur_hard == _h and _cur_mid == _m:
+            _cur_preset = _name
+            break
     return render_template("settings.html", business=biz,
                            sched=db.scheduling_prefs(biz["id"]),
                            integrations=db.list_integrations(biz["id"]),
@@ -1144,7 +1198,11 @@ def settings():
                            reputation_configured=reputation.configured(),
                            reputation_label=reputation.provider_label(),
                            ai_screen_enabled=SCREEN_AI_CONTENT,
-                           owner_email=db.owner_email(biz["id"]))
+                           owner_email=db.owner_email(biz["id"]),
+                           screen_sensitivity=_cur_preset,
+                           screen_sensitivity_presets=list(_presets.keys()),
+                           reputation_enabled=bool(biz.get("reputation_enabled")),
+                           screening_hold=bool(biz.get("screening_hold")))
 
 
 @app.route("/settings/password", methods=["POST"])
@@ -1936,6 +1994,35 @@ def api_engage_screened_call(call_id):
     return jsonify(ok=True, lead_id=lead["id"])
 
 
+@app.route("/api/calls/<int:call_id>/real", methods=["POST"])
+@login_required
+def api_rescue_screened_call(call_id):
+    """Owner override from the dashboard: a screened caller was actually a real customer.
+    Records the rescue (marks them trusted + resets the observation window so graduation
+    is deferred), then re-engages exactly like api_engage_screened_call: open the
+    conversation + send the text-back if the thread is empty, mark the call engaged.
+    Tenant-scoped; refuses an opted-out number (never re-text a STOP)."""
+    biz = current_business()
+    call = db.get_call(call_id, biz["id"])   # tenant-scoped
+    if not call:
+        return jsonify(error="Call not found."), 404
+    caller = (call.get("from_number") or "").strip()
+    if not caller:
+        return jsonify(error="No caller number on file."), 400
+    if db.is_suppressed(biz["id"], caller):
+        return jsonify(error="This caller opted out, so we can't text them."), 400
+    # Core contract: upsert as customer + increment false_positives + reset window.
+    db.record_screening_rescue(biz["id"], caller)
+    # Re-engage: create/find the lead and send the text-back only on an empty thread.
+    lead = (db.get_lead_by_phone(biz["id"], caller)
+            or db.get_lead(db.create_lead(biz["id"], "New Caller", caller)))
+    if not db.get_messages(lead["id"]):
+        reply = open_conversation(biz, lead)    # records the thread + alerts the owner
+        messaging.send_sms(biz, caller, reply)  # transmit (already recorded)
+    db.mark_call_engaged(call_id, lead["id"])
+    return jsonify(ok=True, lead_id=lead["id"])
+
+
 def _mark_number_spam(biz_id, number):
     """Owner says a caller is spam: tag the number 'blocked' for THIS business (so it's
     never cold-pitched again) and add a cross-tenant spam flag that helps pre-screen it
@@ -2245,26 +2332,42 @@ def _caller_behavior(biz_id, caller):
     return {}
 
 
+def _effective_reputation_enabled(biz):
+    """True only when the paid reputation provider is configured AND this business has
+    the per-tenant toggle on. Parallel to _effective_screen_mode: a configured provider
+    with the toggle off (or unset) must NOT fire paid lookups. The toggle defaults 0
+    (off) so existing tenants are never charged without opting in."""
+    return reputation.configured() and bool((biz or {}).get("reputation_enabled"))
+
+
 def _screen_missed_caller(biz, caller):
     """Run the full 'phone screen' for a missed caller: gather the layered signals
     (STIR/SHAKEN attestation off the request, neighbor-spoof, behavior, crowdsource,
     and -- only if the free tiers leave it ambiguous -- a paid reputation lookup), then
     return triage.screen_caller's verdict. Reputation is consulted lazily so the common
-    (clean or obviously-known) case never pays for or waits on a network call."""
+    (clean or obviously-known) case never pays for or waits on a network call.
+
+    Per-tenant thresholds: screen_hard/screen_mid override the app defaults when set,
+    so an owner can make screening stricter or more relaxed without a config deploy."""
     attestation = request.form.get("StirVerstat") if request else None
     nspoof = triage.neighbor_spoof(biz.get("twilio_number") or biz.get("phone"), caller)
     behavior = _caller_behavior(biz["id"], caller)
+    hard = biz.get("screen_hard") or SCREEN_SCORE_HARD
+    mid = biz.get("screen_mid") or SCREEN_SCORE_MID
     verdict = triage.screen_caller(biz["id"], caller, attestation=attestation,
-                                   neighbor_spoof=nspoof, behavior=behavior)
+                                   neighbor_spoof=nspoof, behavior=behavior,
+                                   hard=hard, mid=mid)
     # Only an UNKNOWN caller in the ambiguous band is worth a paid lookup: identity
     # tiers already settled the rest, and a clean/known caller shouldn't cost anything.
-    if (reputation.configured() and verdict["status"] in ("prospect", "review")
-            and verdict["score"] >= SCREEN_SCORE_MID - 20):
+    # Gate on per-tenant toggle: even when the provider is configured, only call it
+    # if this business has reputation_enabled set (paid-tier opt-in).
+    if (_effective_reputation_enabled(biz) and verdict["status"] in ("prospect", "review")
+            and verdict["score"] >= mid - 20):
         rep = reputation.lookup(caller)
         if rep:
             verdict = triage.screen_caller(biz["id"], caller, attestation=attestation,
                                            neighbor_spoof=nspoof, behavior=behavior,
-                                           reputation=rep)
+                                           reputation=rep, hard=hard, mid=mid)
     return verdict
 
 
