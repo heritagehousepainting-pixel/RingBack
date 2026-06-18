@@ -5,6 +5,23 @@ vs. gated. This is the list of things **you** must do to turn the honest-but-gat
 beta / placeholder states into fully live ones. Integration credential steps live in
 `USER_TO_DO.md`; this file tracks the truth-audit follow-ups.
 
+## Autonomy Blueprint — Foundation phase (2026-06-18) — OWNER OPS to flip it live
+The foundation CODE is built + merged (ticker heartbeat + `/health/ticker`; platform owner-alert
+channel `ALERT_FROM_NUMBER` + signup auto-fills alert prefs; public `/demo` on a sandbox business;
+monitor-mode disclosure). 23/23 test files green. These items are **yours** — code can't do them:
+- **Render env:** `FIRSTBACK_RUN_TICKER=1`, `FIRSTBACK_TASKS_SECRET=<rand>`, `FIRSTBACK_TOKEN_KEY=<rand>`
+  (encrypts OAuth tokens at rest — code already honors it), `SMTP_HOST=smtp.resend.com`,
+  `SMTP_FROM=alerts@firstback.app` (+ key), `ALERT_FROM_NUMBER=<platform Twilio # for owner alerts>`.
+- **Reconcile all `FIRSTBACK_*` env + the DB path in Render BEFORE the next deploy** (the rename
+  changed env-var names + the DB filename; mismatch = the app falls back to defaults / resets the DB).
+- **External Render cron → `POST /tasks/run-due` every 60s** with header `X-Tasks-Secret` (the
+  in-process ticker is only a fallback; `/health/ticker` now reports if it goes stale >10 min).
+- **Create the Resend account** + verify the `firstback.app` sending domain.
+- **Voice decision (product call):** deploy `firstback-voice` or demote it from the Pro feature list
+  until deployed (don't sell a text fallback as a $199 feature).
+
+Full spec + the rest of the build order: `~/apps/COO/firstback-blueprint/phase0/PHASE0-SPEC.md` and `AUTONOMY-BLUEPRINT.md`.
+
 ## Command Center — Phase 0 (the "honest hands") — what's live vs. gated
 The `/dashboard` command center was hardened (see `BRAIN.md` for the full vision). Phase 0
 needs **no new external accounts**; it works keyless in the demo brain. Notes:
