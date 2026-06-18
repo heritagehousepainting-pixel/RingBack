@@ -359,12 +359,17 @@ check("a fully wired + approved + forwarded business is LIVE",
       connections.is_live(wired, True) is True)
 
 # Dial-through (advanced): rings a cell first.
+# SF-7: stub send_sentinel_call to return "simulated" so the manual fallback
+# (confirmed=True) fires. The real sentinel path is tested in test_sf7_sentinel.py.
+_orig_send_sentinel = connections.send_sentinel_call
+connections.send_sentinel_call = lambda biz_id: {"status": "simulated"}
 db.set_forwarding_confirmed(1, False)
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "+15551234567"})
 check("dial mode stores the cell to ring", db.get_business(1)["forward_to"] == "+15551234567")
 check("dial mode also marks forwarding confirmed", db.get_business(1)["forwarding_confirmed"] == 1)
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "123"})
 check("a too-short ring-first number is refused", "err=forward" in r.headers.get("Location", ""))
+connections.send_sentinel_call = _orig_send_sentinel
 # restore catcher model for a clean live state
 db.update_phone_voice(1, forward_to="")
 db.set_forwarding_confirmed(1, True)
@@ -458,6 +463,8 @@ messaging.attach_owned_number = _orig_attach
 db.set_business_twilio(1, "+12677562454", "PNheritage", webhooks_wired=True)
 
 # ---- M4: forwarding dial number is canonicalized (or refused) ----
+# SF-7: stub send_sentinel_call to simulate; real path in test_sf7_sentinel.py.
+connections.send_sentinel_call = lambda biz_id: {"status": "simulated"}
 db.set_forwarding_confirmed(1, False)
 db.update_phone_voice(1, forward_to="KEEP")
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "call me 555 123"})
@@ -469,6 +476,7 @@ check("M4: a messy dial number is stored as canonical e164",
       db.get_business(1)["forward_to"] == "+15551234567")
 check("M4: dial confirm marks forwarding confirmed",
       db.get_business(1)["forwarding_confirmed"] == 1)
+connections.send_sentinel_call = _orig_send_sentinel
 # restore catcher model for a clean live state
 db.update_phone_voice(1, forward_to="")
 db.set_forwarding_confirmed(1, True)

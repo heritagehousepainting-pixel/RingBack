@@ -11,13 +11,15 @@ Design goals:
 OAuth: standard web server flow. We ask for offline access so we get a refresh
 token, then mint short-lived access tokens on demand.
 
-Timezone note: estimate slots are wall-clock in the business's local time. This
-build assumes the server's local timezone is the business's timezone (single
-region). Real per-business timezones are a later item (see audit backlog #8).
+Timezone note: estimate slots are wall-clock in the business's local time. Pass
+`tz` (a zoneinfo.ZoneInfo instance) to thread per-business timezone through the
+create path. When tz is None the slot is made aware using astimezone() (server
+local tz) which preserves pre-Phase-2 behavior.
 """
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date as _date
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 import db
 from google_oauth import access_is_fresh
@@ -59,7 +61,10 @@ def auth_url(state):
 
 
 def connect_with_code(business_id, code):
-    """Exchange an auth code for tokens and store them for the business."""
+    """Exchange an auth code for tokens and store them for the business.
+    SF-5: after token exchange, read the calendar's primary timezone and persist
+    it via db.set_business_timezone. Fail-open: a bad timezone never breaks the
+    connect; we log and continue."""
     import requests
     r = requests.post(TOKEN_URL, data={
         "code": code,
@@ -72,6 +77,23 @@ def connect_with_code(business_id, code):
     tok = r.json()
     db.set_google_tokens(business_id, tok.get("access_token"),
                          tok.get("refresh_token"), _expiry_iso(tok), "primary")
+    # SF-5: read the calendar's primary timezone and persist it.
+    try:
+        access_tok = tok.get("access_token")
+        if access_tok:
+            cal_r = requests.get(f"{API_BASE}/calendars/primary",
+                                 headers={"Authorization": f"Bearer {access_tok}"},
+                                 timeout=20)
+            cal_r.raise_for_status()
+            tz_name = cal_r.json().get("timeZone")
+            if tz_name:
+                # Validate via ZoneInfo so an unknown name never persists.
+                ZoneInfo(tz_name)
+                db.set_business_timezone(business_id, tz_name)
+    except Exception as e:
+        print(f"[firstback] google timezone read failed (biz {business_id}): {e}",
+              file=sys.stderr, flush=True)
+        # Fail-open: the connect still succeeds.
 
 
 def disconnect(business_id):
@@ -115,10 +137,15 @@ def _access_token(business_id):
 
 
 # ---- Availability (freebusy) + event creation ----
-def _slot_dt(day_iso, time_key_str):
-    """Local, tz-aware datetime for a slot ('2026-06-15', '09:00')."""
+def _slot_dt(day_iso, time_key_str, tz=None):
+    """Tz-aware datetime for a slot ('2026-06-15', '09:00').
+    When `tz` (a ZoneInfo instance) is given, the slot is anchored in that zone
+    so DST is handled correctly. When tz is None, astimezone() uses the server's
+    local timezone (pre-Phase-2 behavior preserved)."""
     y, m, d = (int(x) for x in day_iso.split("-"))
     hh, mm = (int(x) for x in time_key_str.split(":"))
+    if tz is not None:
+        return datetime(y, m, d, hh, mm, tzinfo=tz)
     return datetime(y, m, d, hh, mm).astimezone()
 
 
@@ -153,14 +180,34 @@ def busy_slot_ids(business_id):
 def _slots_conflicting(intervals, today):
     """Pure helper (unit-testable): given Google busy intervals [{start,end}],
     return the set of estimate slot ids that overlap one. Each estimate is
-    treated as a one-hour block."""
+    treated as a one-hour block.
+
+    Handles both timed events ({"dateTime": "..."}) and all-day events
+    ({"date": "YYYY-MM-DD"}) correctly. An all-day event occupies the full
+    local day (00:00 to 23:59:59.999...) in the server's local timezone."""
     busy = []
     for iv in intervals:
         try:
-            bs = datetime.fromisoformat(iv["start"].replace("Z", "+00:00"))
-            be = datetime.fromisoformat(iv["end"].replace("Z", "+00:00"))
-            busy.append((bs, be))
-        except (ValueError, KeyError, AttributeError):
+            start_raw = iv.get("start") or {}
+            end_raw = iv.get("end") or {}
+            # All-day event: Google uses {"date": "YYYY-MM-DD"}
+            if isinstance(start_raw, dict) and "date" in start_raw:
+                s_date = _date.fromisoformat(start_raw["date"])
+                e_date = _date.fromisoformat(end_raw["date"])
+                # Treat as covering [s_date 00:00, e_date 00:00) local time.
+                bs = datetime(s_date.year, s_date.month, s_date.day).astimezone()
+                be = datetime(e_date.year, e_date.month, e_date.day).astimezone()
+                busy.append((bs, be))
+            elif isinstance(start_raw, dict) and "dateTime" in start_raw:
+                bs = datetime.fromisoformat(start_raw["dateTime"].replace("Z", "+00:00"))
+                be = datetime.fromisoformat(end_raw["dateTime"].replace("Z", "+00:00"))
+                busy.append((bs, be))
+            else:
+                # Legacy flat string format (pre-Phase-2 code path, kept for compat)
+                bs = datetime.fromisoformat(str(start_raw).replace("Z", "+00:00"))
+                be = datetime.fromisoformat(str(end_raw).replace("Z", "+00:00"))
+                busy.append((bs, be))
+        except (ValueError, KeyError, AttributeError, TypeError):
             continue
     out = set()
     for i in range(1, BOOKING_HORIZON_DAYS + 1):
@@ -174,15 +221,18 @@ def _slots_conflicting(intervals, today):
     return out
 
 
-def create_event(business_id, summary, description, day_iso, time_key_str):
+def create_event(business_id, summary, description, day_iso, time_key_str, tz=None):
     """Create a 1-hour event on the business's Google calendar. Returns the event
-    id, or None if not connected or on error."""
+    id, or None if not connected or on error.
+
+    `tz` (a ZoneInfo instance) controls the timezone the slot is anchored in.
+    When None, server-local tz is used (pre-Phase-2 behavior preserved)."""
     token = _access_token(business_id)
     if not token:
         return None
     intg = db.get_integration(business_id, "google") or {}
     cal_id = intg.get("calendar_id") or "primary"
-    start = _slot_dt(day_iso, time_key_str)
+    start = _slot_dt(day_iso, time_key_str, tz=tz)
     end = start + timedelta(hours=1)
     import requests
     try:
@@ -199,9 +249,66 @@ def create_event(business_id, summary, description, day_iso, time_key_str):
         return None
 
 
-def create_event_async(business_id, summary, description, day_iso, time_key_str):
-    """Fire-and-forget event creation so booking never blocks on Google."""
+def create_event_and_store(business_id, appointment_id, summary, description,
+                           day_iso, time_key_str, tz=None):
+    """Create a calendar event and persist the Google event id on the appointment row
+    via db.set_google_event_id. Returns the event id or None."""
+    event_id = create_event(business_id, summary, description, day_iso, time_key_str, tz=tz)
+    if event_id:
+        try:
+            db.set_google_event_id(appointment_id, event_id)
+        except Exception as e:
+            print(f"[firstback] set_google_event_id failed (appt {appointment_id}): {e}",
+                  file=sys.stderr, flush=True)
+    return event_id
+
+
+def create_event_async(business_id, appointment_id, summary, description,
+                       day_iso, time_key_str, tz=None):
+    """Fire-and-forget event creation so booking never blocks on Google.
+    Stores the returned event id on the appointment row (Phase 2 F04 signature:
+    adds appointment_id and tz)."""
     import threading
-    threading.Thread(target=create_event,
-                     args=(business_id, summary, description, day_iso, time_key_str),
+    threading.Thread(target=create_event_and_store,
+                     args=(business_id, appointment_id, summary, description,
+                           day_iso, time_key_str),
+                     kwargs={"tz": tz},
+                     daemon=True).start()
+
+
+def cancel_event(business_id, google_event_id):
+    """Delete a Google Calendar event by its id. Idempotent: a 410 (already gone)
+    is treated as success. Returns True on success/already-gone, False on error."""
+    if not google_event_id:
+        return False
+    token = _access_token(business_id)
+    if not token:
+        return False
+    intg = db.get_integration(business_id, "google") or {}
+    cal_id = intg.get("calendar_id") or "primary"
+    import requests
+    try:
+        r = requests.delete(f"{API_BASE}/calendars/{cal_id}/events/{google_event_id}",
+                            headers={"Authorization": f"Bearer {token}"}, timeout=20)
+        if r.status_code in (204, 200, 410):
+            return True
+        r.raise_for_status()
+        return True
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 410:
+            return True   # already gone -- idempotent
+        print(f"[firstback] google event cancel failed (biz {business_id}, "
+              f"event {google_event_id}): {e}", file=sys.stderr, flush=True)
+        return False
+    except Exception as e:
+        print(f"[firstback] google event cancel failed (biz {business_id}, "
+              f"event {google_event_id}): {e}", file=sys.stderr, flush=True)
+        return False
+
+
+def cancel_event_async(business_id, google_event_id):
+    """Fire-and-forget event cancellation."""
+    import threading
+    threading.Thread(target=cancel_event,
+                     args=(business_id, google_event_id),
                      daemon=True).start()

@@ -14,10 +14,16 @@ no-op when unconfigured and swallows + logs any API error with the "[firstback]"
 prefix, never raising into a request.
 """
 import sys
+from datetime import datetime, timezone, timedelta
 
 import db
 import messaging
 import compliance
+
+# Probe timeout: if a sentinel never confirms within this many seconds, the
+# forwarding is considered lost on the next check_forwarding_health run.
+_SENTINEL_TIMEOUT_SECS = 120   # 2 minutes -- generous for carrier propagation
+_PROBE_INTERVAL_DAYS = 7       # re-probe weekly
 
 # ---- Setup steps (the wizard's spine) ----
 STEPS = ("profile", "number", "a2p", "forwarding")
@@ -295,3 +301,110 @@ def forwarding_code(carrier, number):
     return {"carrier": carrier if carrier in CARRIER_FORWARD_CODES else "other",
             "label": c["label"], "note": c["note"], "cancel": c["cancel"],
             "activate": c["activate"].replace("{num}", digits)}
+
+
+# ---- SF-7: Forwarding sentinel (verify call-forwarding is live) ----
+
+def _sentinel_twiml_url():
+    """Absolute URL for the sentinel TwiML handler. Uses PUBLIC_BASE_URL
+    (FIRSTBACK_PUBLIC_URL env var) when available (production / Render) so
+    Twilio can reach the public host."""
+    import config
+    base = getattr(config, "PUBLIC_BASE_URL", None) or ""
+    base = base.rstrip("/")
+    return (base + "/webhooks/twilio/voice/sentinel-twiml") if base else None
+
+
+def send_sentinel_call(business_id):
+    """Place an outbound verification call to the business's `forward_to` number.
+    When Twilio is configured and a forward_to is set, places a real call and
+    stores the SID via db.set_forwarding_sentinel. The inbound webhook
+    (twilio_voice_inbound) is the ONLY place that sets forwarding_confirmed=True.
+
+    Returns a dict with 'status': one of 'placed', 'simulated', 'error',
+    'no_forward_to', 'no_twiml_url'.
+
+    [DECIDED] Honesty rule: this function NEVER sets forwarding_confirmed=True.
+    Confirmed=True is set ONLY in twilio_voice_inbound when the inbound CallSid
+    matches the stored sentinel SID."""
+    biz = db.get_business(business_id) if not isinstance(business_id, dict) else business_id
+    if not biz:
+        return {"status": "error", "error": "business not found"}
+    forward_to = (biz.get("forward_to") or "").strip()
+    if not forward_to:
+        return {"status": "no_forward_to"}
+    twiml_url = _sentinel_twiml_url()
+    if not twiml_url:
+        # Dev/local: no public URL configured. Return 'simulated' so the route can
+        # show an honest manual-fallback message.
+        return {"status": "simulated"}
+    result = messaging.place_call(biz, forward_to, twiml_url)
+    if result.get("status") == "placed":
+        sid = result.get("sid")
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            db.set_forwarding_sentinel(biz["id"], sid, now)
+        except Exception as e:
+            print(f"[firstback] set_forwarding_sentinel failed (biz {biz['id']}): {e}",
+                  file=sys.stderr, flush=True)
+        return {"status": "placed", "sid": sid}
+    return result
+
+
+def check_forwarding_health():
+    """Weekly re-probe: for every confirmed forwarding business whose last probe
+    is null or >7 days old, place a new sentinel call and record the probe time.
+
+    If a prior sentinel was placed and never confirmed within the timeout window,
+    flip forwarding_confirmed=False and fire a 'forwarding_lost' alert to the owner.
+    Called by reminders.tick_once (Agent 3 wires this). Never raises."""
+    try:
+        import alerts
+        businesses = db.list_businesses()
+        now_utc = datetime.now(timezone.utc)
+        for biz in businesses:
+            if not biz.get("forwarding_confirmed"):
+                continue
+            # Check if a prior sentinel was placed but never confirmed (timed out).
+            sentinel_sid = biz.get("forwarding_sentinel_sid")
+            sentinel_at_raw = biz.get("forwarding_sentinel_at")
+            if sentinel_sid and sentinel_at_raw:
+                try:
+                    sent_at = datetime.fromisoformat(
+                        sentinel_at_raw.replace("Z", "+00:00"))
+                    if (now_utc - sent_at).total_seconds() > _SENTINEL_TIMEOUT_SECS:
+                        # Probe timed out and was never confirmed -> forwarding lost.
+                        db.set_forwarding_confirmed(biz["id"], False)
+                        db.set_forwarding_sentinel(biz["id"], None, None)
+                        try:
+                            # Agent 1 adds "forwarding_lost" to ALERT_KINDS; we
+                            # call notify_async (the existing fan-out path) so it
+                            # works as soon as the kind is registered.
+                            alerts.notify_async(biz, "forwarding_lost", {})
+                        except Exception as ae:
+                            print(f"[firstback] forwarding_lost alert failed "
+                                  f"(biz {biz['id']}): {ae}", file=sys.stderr, flush=True)
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            # Check if it's time for a weekly re-probe.
+            last_probe_raw = biz.get("forwarding_last_probe_at")
+            needs_probe = True
+            if last_probe_raw:
+                try:
+                    last_probe = datetime.fromisoformat(
+                        last_probe_raw.replace("Z", "+00:00"))
+                    age_days = (now_utc - last_probe).total_seconds() / 86400
+                    needs_probe = age_days > _PROBE_INTERVAL_DAYS
+                except (ValueError, TypeError):
+                    needs_probe = True
+            if needs_probe:
+                try:
+                    db.set_forwarding_probe(biz["id"])
+                    send_sentinel_call(biz["id"])
+                except Exception as e:
+                    print(f"[firstback] forwarding probe failed (biz {biz['id']}): {e}",
+                          file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[firstback] check_forwarding_health error: {e}",
+              file=sys.stderr, flush=True)
