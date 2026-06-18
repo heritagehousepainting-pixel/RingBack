@@ -389,6 +389,35 @@ if unknown_sends:
     print(f"  [!] Unknown recipients: {unknown_sends}")
 
 
+# ---- Regression: daily dedupe must hold across a >120s ticker gap ----------
+# The ticker runs every few minutes; a day-stamped key only collapses if the dedupe
+# lookback covers the whole day (not the 120s event window). Backdate the recorded
+# alert and re-scan to simulate a later tick in the same day. (Runs after test4's
+# owner-cell assertions, so its extra owner-cell sends don't affect them.)
+_rb = db.create_business({"name": "Dedupe Test"})
+_rl = db.create_lead(_rb, "Idle Ida", "+15557770000")
+_old = (datetime.now(timezone.utc) - timedelta(hours=50)).isoformat()
+_rconn = db.get_conn()
+_rconn.execute("UPDATE businesses SET alert_sms=? WHERE id=?", ("+15550009999", _rb))
+_rconn.execute("UPDATE leads SET status='replied', created_at=? WHERE id=?", (_old, _rl))
+_rconn.execute("INSERT INTO messages (lead_id, direction, body, created_at) VALUES (?,?,?,?)",
+               (_rl, "in", "any update?", _old))
+_rconn.commit(); _rconn.close()
+
+_before = len(_ALL_SMS_RECIPIENTS)
+reminders.scan_stall_nudges()
+_after_first = len(_ALL_SMS_RECIPIENTS)
+_bconn = db.get_conn()
+_back = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+_bconn.execute("UPDATE alerts SET created_at=? WHERE dedupe_key LIKE 'vic_stall:%'", (_back,))
+_bconn.commit(); _bconn.close()
+reminders.scan_stall_nudges()   # 10 min later -> must STILL dedupe
+_after_second = len(_ALL_SMS_RECIPIENTS)
+check("stall nudge fired once for the idle lead", _after_first - _before == 1)
+check("daily dedupe holds across a >120s ticker gap (no re-send)",
+      _after_second == _after_first)
+
+
 # ---- Results ----------------------------------------------------------------
 print(f"\n{'='*40}")
 print(f"Results: {_pass} passed, {_fail} failed")

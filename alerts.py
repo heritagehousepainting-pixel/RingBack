@@ -31,6 +31,10 @@ ALERT_KINDS = ("lead", "booking", "urgent", "canceled", "sms_fail", "forwarding_
                "roi_milestone", "vic_morning", "vic_stall")
 # Collapse identical alerts (same business + event) within this many seconds.
 ALERT_DEDUPE_SECONDS = 120
+# Proactive daily pushes (day-stamped keys) collapse over the whole local day, not 120s --
+# the ticker fires every few minutes, so a short window would re-send them on each pass.
+_DAILY_DEDUPE_SECONDS = 26 * 3600
+_DAILY_DEDUPE_KINDS = ("vic_morning", "vic_stall")
 
 # A cancellation rides the same toggle as a booking (both are "your calendar changed").
 # sms_fail and forwarding_lost ride the urgent toggle (operational alerts the owner needs).
@@ -91,8 +95,8 @@ def format_message(kind, context):
         hottest = (context.get("hottest") or "").strip()
         money_part = f", ~{money} on the table" if money else ""
         hottest_part = f" {hottest}." if hottest else ""
-        lead_word = "lead" if n == 1 else "leads"
-        return f"{n} {lead_word} need you{money_part}.{hottest_part} Open FirstBack."
+        lead_word = "lead needs" if n == 1 else "leads need"
+        return f"{n} {lead_word} you{money_part}.{hottest_part} Open FirstBack."
     if kind == "vic_stall":
         name = (context.get("name") or "them").strip()
         idle_h = context.get("idle_hours", 0)
@@ -201,7 +205,12 @@ def notify(business, kind, context):
     # both pass the check and double-alert. The in-app row is the audit trail AND
     # the claim. (The slow SMS/email sends below stay OUTSIDE the lock.)
     with _dedupe_lock:
-        if db.alert_recent(bid, dedupe, ALERT_DEDUPE_SECONDS):
+        # vic_morning/vic_stall carry a day-stamped key and must collapse over the WHOLE
+        # local day -- the ticker runs every few minutes, so a 120s window would re-send
+        # the morning digest (and every stall nudge) on each pass. Use a 26h window for
+        # those (slightly over a day to absorb DST / clock skew); 120s for event alerts.
+        window = _DAILY_DEDUPE_SECONDS if kind in _DAILY_DEDUPE_KINDS else ALERT_DEDUPE_SECONDS
+        if db.alert_recent(bid, dedupe, window):
             return []  # already alerted for this event recently
         db.add_alert(bid, kind, "inapp", "", "recorded", dedupe, body)
     attempted.append(("inapp", "recorded"))
