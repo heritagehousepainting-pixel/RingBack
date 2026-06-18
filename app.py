@@ -1190,12 +1190,14 @@ def setup_forwarding():
             if sentinel_result.get("status") == "placed":
                 # Leave confirmed=0; the inbound webhook confirms it.
                 return redirect("/setup?saved=forwarding&verifying=1")
-            # DEV/LOCAL FALLBACK (clearly labelled): Twilio not configured or no
-            # public URL -> sentinel cannot be placed. Confirm manually so local
-            # dev still works; this branch is unreachable on production.
-            db.set_forwarding_confirmed(biz["id"], True)
+            # Twilio is configured but the sentinel could not be placed (almost always
+            # FIRSTBACK_PUBLIC_URL is unset, so Twilio has no TwiML URL to dial). We do
+            # NOT self-attest confirmed here -- that would re-introduce the exact unproven
+            # "confirmed" SF-7 exists to kill. Leave it unconfirmed and surface the misconfig.
+            return redirect("/setup?saved=forwarding&unverified=1")
         else:
-            # Twilio not configured (local dev) -> manual fallback confirm.
+            # No telephony configured at all (pure local dev) -> nothing to verify
+            # against; allow a manual confirm so the local wizard can complete.
             db.set_forwarding_confirmed(biz["id"], True)
     else:
         db.update_phone_voice(biz["id"], forward_to="")   # catcher: blank = text immediately
@@ -1205,15 +1207,18 @@ def setup_forwarding():
         # back to the FirstBack number -> twilio_voice_inbound confirms it. We never
         # self-attest confirmed=True here. [DECIDED] honesty rule.
         owner_cell = messaging.to_e164((biz.get("alert_sms") or biz.get("phone") or "").strip())
-        if messaging.configured() and owner_cell:
+        if messaging.configured():
+            if not owner_cell:
+                # We have telephony but no cell to sentinel -> can't verify honestly.
+                return redirect("/setup?saved=forwarding&unverified=nocell")
             sentinel_result = connections.send_sentinel_call(biz["id"], to_number=owner_cell)
             if sentinel_result.get("status") == "placed":
                 return redirect("/setup?saved=forwarding&verifying=1")
-            # Sentinel couldn't be placed (no public URL / Twilio error): fall back to a
-            # clearly-labelled manual confirm so local dev still works.
-            db.set_forwarding_confirmed(biz["id"], True)
+            # Configured but the sentinel couldn't be placed (no public URL / error):
+            # do NOT self-attest. Leave unconfirmed and surface the misconfig.
+            return redirect("/setup?saved=forwarding&unverified=1")
         else:
-            # Twilio not configured (local dev) or no owner cell on file -> manual fallback.
+            # No telephony configured at all (pure local dev) -> manual confirm.
             db.set_forwarding_confirmed(biz["id"], True)
     return redirect("/setup?saved=forwarding")
 
@@ -1360,6 +1365,7 @@ def open_conversation(biz, lead):
                     f"FirstBack booked a free estimate for {lead['name']} ({lead.get('phone')}).",
                     gday, gtime, tz=_tz)
                 reminders.enqueue_reminder(biz, lead, gday, gtime)
+                reminders.enqueue_morning_reminder(biz, lead, gday, gtime)
     return reply
 
 
@@ -1431,6 +1437,7 @@ def handle_inbound(biz, lead, body):
                     f"FirstBack booked a free estimate for {lead['name']} ({lead['phone']}).",
                     gday, gtime, tz=_tz)
                 reminders.enqueue_reminder(biz, lead, gday, gtime)
+                reminders.enqueue_morning_reminder(biz, lead, gday, gtime)
         else:
             # F03 double-booking recovery: slot was taken between turns.
             # Generate a recovery reply offering the next open slot.
@@ -2205,31 +2212,32 @@ def twilio_sms_status():
     db.set_message_delivery(msg_sid, msg_status)
     if msg_status in ("failed", "undelivered") and msg_sid:
         try:
+            # The lookup JOINs the lead so business_id + the destination phone are
+            # present (the messages table stores neither). Attempt count comes from
+            # how many retries already exist for this lead in the recent window --
+            # the messages row can't tell us retry depth -- which enforces the cap.
             row = db.get_message_by_provider_sid(msg_sid)
-            if row:
-                attempt = int(row.get("retry_count") or 0) + 1
-                backoff = {1: 30, 2: 120, 3: 600}
+            if row and row.get("business_id") and row.get("lead_id"):
+                attempt = db.count_sms_retries(row["lead_id"]) + 1
+                biz = db.get_business(row["business_id"])
                 if attempt <= 3:
-                    from datetime import timezone as _tz
-                    delay_s = backoff.get(attempt, 600)
-                    send_at = (datetime.now(_tz.utc)
-                               + __import__("datetime").timedelta(seconds=delay_s)).isoformat()
-                    biz = db.get_business(row["business_id"]) if row.get("business_id") else None
+                    from datetime import timezone as _tz, timedelta as _td
+                    delay_s = {1: 30, 2: 120, 3: 600}.get(attempt, 600)
+                    send_at = (datetime.now(_tz.utc) + _td(seconds=delay_s)).isoformat()
                     db.queue_sms_retry(
                         row["business_id"],
-                        row.get("lead_id"),
-                        row.get("to", row.get("phone", "")),
+                        row["lead_id"],
+                        row.get("lead_phone", ""),
                         row.get("body", ""),
                         attempt,
                         send_at,
                     )
-                else:
-                    biz = db.get_business(row["business_id"]) if row.get("business_id") else None
-                    if biz:
-                        alerts.notify_async(biz, "sms_fail", {
-                            "lead_id": row.get("lead_id"),
-                            "message_id": row.get("id"),
-                        })
+                elif biz:
+                    # Cap reached: stop retrying and tell the owner the text never landed.
+                    alerts.notify_async(biz, "sms_fail", {
+                        "lead_id": row.get("lead_id"),
+                        "message_id": row.get("id"),
+                    })
         except Exception as _e:
             print(f"[firstback] SF-4 retry enqueue failed ({msg_sid}): {_e}",
                   file=sys.stderr, flush=True)

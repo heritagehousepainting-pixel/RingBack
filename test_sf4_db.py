@@ -110,8 +110,11 @@ conn.close()
 check("queue_sms_retry row has kind='sms_retry'", row is not None and row["kind"] == "sms_retry")
 check("queue_sms_retry row has retry_count=1", row is not None and row["retry_count"] == 1)
 check("queue_sms_retry row has status='pending'", row is not None and row["status"] == "pending")
-check("queue_sms_retry body encodes destination",
-      row is not None and "[retry_to:+15551119999]" in row["body"])
+# The body must be the CLEAN message -- the destination is resolved from the lead at
+# send time, never encoded into the text the customer would see.
+check("queue_sms_retry body is the clean message (no [retry_to:] prefix)",
+      row is not None and row["body"] == "Your estimate reminder."
+      and "[retry_to" not in row["body"])
 
 
 # ---- 2. queue_sms_retry attempt 2 ----
@@ -133,6 +136,25 @@ check("get_message_by_provider_sid: hit returns dict",
       isinstance(found, dict) and found.get("provider_sid") == "SM_testSID001")
 check("get_message_by_provider_sid: returned dict has body",
       found is not None and found.get("body") == "Hello from FirstBack")
+# The delivery webhook needs business_id + the destination phone, neither of which
+# lives on the messages table -- the lookup must JOIN them in. (Regression: the
+# webhook retry path silently KeyError'd on row["business_id"] before this.)
+check("get_message_by_provider_sid: enriched with business_id from the lead",
+      found is not None and found.get("business_id") == 1)
+check("get_message_by_provider_sid: enriched with the lead's phone",
+      found is not None and found.get("lead_phone") == "+15551119999")
+
+# ---- 3b. count_sms_retries enforces the 3-retry cap from the webhook ----
+# Two sms_retry rows already exist for this lead (attempts 1 + 2 above).
+check("count_sms_retries sees the existing retries", db.count_sms_retries(lead_id) == 2)
+# A 3rd webhook failure would compute attempt = count+1 = 3 (still <=3, retries once
+# more); a 4th would be attempt 4 (>3) -> owner alert, no infinite loop.
+_third_id = db.queue_sms_retry(1, lead_id, "+15551119999", "Third try.", 3, send_at)
+check("count_sms_retries caps the chain at 3", db.count_sms_retries(lead_id) == 3)
+check("count_sms_retries(None) is 0", db.count_sms_retries(None) == 0)
+# Mark this extra probe row sent so it doesn't perturb the find_scheduled_message
+# state below (count_sms_retries counts by created_at, unaffected by status).
+db.mark_scheduled(_third_id, "sent")
 
 miss = db.get_message_by_provider_sid("SM_doesnotexist")
 check("get_message_by_provider_sid: miss returns None", miss is None)

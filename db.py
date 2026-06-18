@@ -1032,19 +1032,18 @@ def set_forwarding_probe(business_id):
 def queue_sms_retry(business_id, lead_id, to, body, attempt, send_at,
                     kind="sms_retry"):
     """Queue a delayed SMS retry as a new scheduled_messages row (async, never
-    synchronous). `attempt` is the retry attempt number (1, 2, 3); `to` is stored
-    in the body prefix so the sender knows the destination. Returns the new row id,
-    or None on a DB error."""
-    # Encode destination into body so run_due_once can route it; the kind tag
-    # disambiguates from normal reminders so the ticker can handle it.
-    encoded_body = f"[retry_to:{to}] {body}"
+    synchronous). `attempt` is the retry attempt number (1, 2, 3), stored in
+    retry_count so the 3-retry cap is enforced across the chain. The destination is
+    resolved from the lead at send time (run_due_once JOINs the lead's phone), so
+    `to` is informational only and is NOT written into the message body. Returns the
+    new row id, or None on a DB error."""
     conn = get_conn()
     try:
         cur = conn.execute(
             "INSERT INTO scheduled_messages "
             "(business_id, lead_id, kind, send_at, body, status, retry_count, created_at) "
             "VALUES (?,?,?,?,?, 'pending', ?,?)",
-            (business_id, lead_id, kind, send_at, encoded_body, attempt, now_iso()))
+            (business_id, lead_id, kind, send_at, body, attempt, now_iso()))
         conn.commit()
         row_id = cur.lastrowid
     except sqlite3.Error as e:
@@ -1057,16 +1056,38 @@ def queue_sms_retry(business_id, lead_id, to, body, attempt, send_at,
 
 
 def get_message_by_provider_sid(provider_sid):
-    """Look up a sent message by its Twilio SID (for delivery-status webhooks).
-    Returns the message row as a dict, or None if not found."""
+    """Look up a sent message by its Twilio SID (for SF-4 delivery-status webhooks),
+    enriched with the owning business_id and the lead's phone. The messages table
+    itself stores NEITHER (only lead_id), so we JOIN leads -- the delivery webhook
+    needs both to enqueue a retry. Returns a dict, or None if not found."""
     if not provider_sid:
         return None
     conn = get_conn()
     row = conn.execute(
-        "SELECT * FROM messages WHERE provider_sid=? LIMIT 1", (provider_sid,)
+        "SELECT m.*, l.phone AS lead_phone, l.business_id AS business_id "
+        "FROM messages m LEFT JOIN leads l ON l.id = m.lead_id "
+        "WHERE m.provider_sid=? LIMIT 1", (provider_sid,)
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def count_sms_retries(lead_id, within_minutes=30):
+    """How many SF-4 retry rows already exist for this lead in the recent window.
+    The delivery webhook uses this to derive the next attempt number and enforce the
+    3-retry cap, since the messages table doesn't track retry depth. The window scopes
+    one failure chain (max backoff 30s+2m+10m ~= 13 min) so a genuinely new send later
+    starts fresh. Returns an int."""
+    if not lead_id:
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=within_minutes)).isoformat()
+    conn = get_conn()
+    n = conn.execute(
+        "SELECT COUNT(*) FROM scheduled_messages "
+        "WHERE lead_id=? AND kind='sms_retry' AND created_at>=?",
+        (lead_id, cutoff)).fetchone()[0]
+    conn.close()
+    return int(n)
 
 
 def find_scheduled_message(business_id, lead_id, kind):

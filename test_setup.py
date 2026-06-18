@@ -373,15 +373,25 @@ check("wiring the webhooks clears the 'not wired' blocker",
 check("a fully wired + approved + forwarded business is LIVE",
       connections.is_live(wired, True) is True)
 
-# Dial-through (advanced): rings a cell first.
-# SF-7: stub send_sentinel_call to return "simulated" so the manual fallback
-# (confirmed=True) fires. The real sentinel path is tested in test_sf7_sentinel.py.
+# Dial-through (advanced): rings a cell first. SF-7 honesty: a placed sentinel
+# leaves the wizard "verifying" and never self-confirms; the inbound webhook is the
+# only thing that confirms (covered in test_sf7_sentinel.py).
 _orig_send_sentinel = connections.send_sentinel_call
-connections.send_sentinel_call = lambda biz_id, to_number=None: {"status": "simulated"}
+connections.send_sentinel_call = lambda biz_id, to_number=None: {"status": "placed", "sid": "CAtest"}
 db.set_forwarding_confirmed(1, False)
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "+15551234567"})
 check("dial mode stores the cell to ring", db.get_business(1)["forward_to"] == "+15551234567")
-check("dial mode also marks forwarding confirmed", db.get_business(1)["forwarding_confirmed"] == 1)
+check("dial mode fires a sentinel (verifying) and does NOT self-confirm",
+      "verifying=1" in r.headers.get("Location", "")
+      and db.get_business(1)["forwarding_confirmed"] == 0)
+# Configured-but-unplaceable sentinel (e.g. FIRSTBACK_PUBLIC_URL unset on a real
+# deploy) must NOT silently self-attest forwarding -- that's the lie SF-7 removed.
+connections.send_sentinel_call = lambda biz_id, to_number=None: {"status": "simulated"}
+db.set_forwarding_confirmed(1, False)
+r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "+15551234567"})
+check("dial mode does NOT self-confirm when the sentinel can't be placed",
+      "unverified=1" in r.headers.get("Location", "")
+      and db.get_business(1)["forwarding_confirmed"] == 0)
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "123"})
 check("a too-short ring-first number is refused", "err=forward" in r.headers.get("Location", ""))
 connections.send_sentinel_call = _orig_send_sentinel
@@ -478,8 +488,8 @@ messaging.attach_owned_number = _orig_attach
 db.set_business_twilio(1, "+12677562454", "PNheritage", webhooks_wired=True)
 
 # ---- M4: forwarding dial number is canonicalized (or refused) ----
-# SF-7: stub send_sentinel_call to simulate; real path in test_sf7_sentinel.py.
-connections.send_sentinel_call = lambda biz_id: {"status": "simulated"}
+# SF-7: stub send_sentinel_call; real path in test_sf7_sentinel.py.
+connections.send_sentinel_call = lambda biz_id, to_number=None: {"status": "simulated"}
 db.set_forwarding_confirmed(1, False)
 db.update_phone_voice(1, forward_to="KEEP")
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "call me 555 123"})
@@ -489,8 +499,9 @@ check("M4: a refused dial number leaves forward_to unchanged",
 r = client.post("/setup/forwarding", data={"mode": "dial", "forward_to": "(555) 123-4567"})
 check("M4: a messy dial number is stored as canonical e164",
       db.get_business(1)["forward_to"] == "+15551234567")
-check("M4: dial confirm marks forwarding confirmed",
-      db.get_business(1)["forwarding_confirmed"] == 1)
+# Honesty: an unplaceable sentinel (simulated) must NOT self-confirm forwarding.
+check("M4: dial confirm does NOT self-attest when the sentinel can't be placed",
+      db.get_business(1)["forwarding_confirmed"] == 0)
 connections.send_sentinel_call = _orig_send_sentinel
 # restore catcher model for a clean live state
 db.update_phone_voice(1, forward_to="")
