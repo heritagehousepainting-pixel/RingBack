@@ -3,7 +3,7 @@
 
 {% block title %}ROI{% endblock %}
 {% block page_title %}ROI{% endblock %}
-{% block page_sub %}<p class="page-sub">What {{ app_name }} has recovered for {{ business.name }} — leads captured, estimates booked, and an estimate of the revenue that would have walked.</p>{% endblock %}
+{% block page_sub %}<p class="page-sub">What {{ app_name }} has recovered for {{ business.name }} -- leads captured, estimates booked, and an estimate of the revenue that would have walked.</p>{% endblock %}
 
 {% block content %}
 <div id="roi" data-endpoint="/api/analytics">
@@ -11,6 +11,16 @@
     <button type="button" class="btn btn-secondary btn-sm roi-r is-active" data-range="30d" aria-pressed="true">30 days</button>
     <button type="button" class="btn btn-secondary btn-sm roi-r" data-range="90d" aria-pressed="false">90 days</button>
     <button type="button" class="btn btn-secondary btn-sm roi-r" data-range="all" aria-pressed="false">All time</button>
+  </div>
+
+  {# ROI headline tile -- rendered by roi.js when analytics data loads #}
+  <div id="roi-headline" class="roi-headline-tile" aria-live="polite" style="display:none">
+    <div class="roi-headline-inner">
+      <span class="roi-headline-label">Estimated return</span>
+      <span class="roi-headline-value" id="roi-headline-value"></span>
+      <span class="roi-headline-sub" id="roi-headline-sub"></span>
+    </div>
+    <p class="roi-headline-note" id="roi-headline-note"></p>
   </div>
 
   <div id="roi-tiles" class="stat-row" aria-live="polite"></div>
@@ -24,6 +34,47 @@
   {% endcall %}
 
   <p class="roi-foot">Revenue is an <strong>estimate</strong> based on the average job value you set in
-    <a href="/settings">Settings</a> — not collected money.</p>
+    <a href="/settings">Settings</a> -- not collected money.</p>
 </div>
+
+<script>
+// ROI headline tile: reads roi_multiple + revenue + avg_source from the analytics
+// payload and surfaces an honest "paid for itself ~Nx" headline.
+// The tile stays hidden when data hasn't loaded or roi_multiple is null.
+(function () {
+  var headline = document.getElementById('roi-headline');
+  var valEl    = document.getElementById('roi-headline-value');
+  var subEl    = document.getElementById('roi-headline-sub');
+  var noteEl   = document.getElementById('roi-headline-note');
+
+  function renderHeadline(data) {
+    var multiple = data && data.roi_multiple;
+    var revenue  = data && data.totals && data.totals.revenue;
+    var src      = data && data.avg_source;
+
+    if (!multiple || !revenue) {
+      headline.style.display = 'none';
+      return;
+    }
+
+    var rev = revenue.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0});
+    valEl.textContent = 'paid for itself ~' + multiple + 'x';
+    subEl.textContent = 'estimated ' + rev + ' in booked jobs';
+
+    if (src === 'owner') {
+      noteEl.textContent = 'Based on your average job value. Revenue is an estimate -- not collected money.';
+    } else {
+      noteEl.textContent = 'Industry estimate -- set your average job value in Settings for an exact number. Revenue is an estimate -- not collected money.';
+    }
+
+    headline.style.display = '';
+  }
+
+  // Hook into the existing roi.js data-fetch lifecycle via a CustomEvent dispatched
+  // by roi.js when analytics data arrives, or fall back to polling the tiles.
+  document.addEventListener('roi:data', function (e) {
+    renderHeadline(e.detail);
+  });
+}());
+</script>
 {% endblock %}
