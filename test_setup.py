@@ -45,32 +45,11 @@ def _no_net(*a, **k):
 _rq_guard.get = _no_net
 _rq_guard.post = _no_net
 
-# Phase 3 SF-8: stub A1/A2 seams not yet implemented
-# db.set_business_type (A1) -- called from /signup
-def _stub_set_business_type(business_id, business_type):
-    try:
-        conn = db.get_conn()
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(businesses)").fetchall()]
-        if "business_type" not in cols:
-            conn.execute("ALTER TABLE businesses ADD COLUMN business_type TEXT DEFAULT 'unknown'")
-        conn.execute("UPDATE businesses SET business_type=? WHERE id=?",
-                     (business_type, business_id))
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
-db.set_business_type = _stub_set_business_type
-
-# connections.submit_a2p (A2) -- called from setup_a2p mode=auto/submit
-# Simulates the submit: sets a2p_status=pending + a2p_submitted_at (the real
-# connections.submit_a2p will do this after the merge; here we replicate the
-# minimum so test_setup assertions on status/submitted_at still hold).
-from datetime import datetime as _dt
-def _stub_submit_a2p(business_id):
-    db.set_a2p_registration(business_id, status="pending",
-                            submitted_at=_dt.utcnow().isoformat(timespec="seconds"))
-    return {"status": "simulated"}
-connections.submit_a2p = _stub_submit_a2p
+# Phase 3 SF-8: db.set_business_type (A1) + connections.submit_a2p (A2) are now REAL
+# (merged). We deliberately do NOT stub them, so this suite exercises the real
+# integration. submit_a2p is a safe no-op here: TWILIO_TRUST_PRODUCT_SID is unset, so
+# messaging.trust_hub_configured() is False -> submit_a2p returns "simulated" and makes
+# NO Twilio call (the network tripwire above would catch any leak).
 
 
 _pass = _fail = 0
