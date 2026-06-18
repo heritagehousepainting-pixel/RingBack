@@ -22,6 +22,13 @@ monitor-mode disclosure). 23/23 test files green. These items are **yours** — 
 
 Full spec + the rest of the build order: `~/apps/COO/firstback-blueprint/phase0/PHASE0-SPEC.md` and `AUTONOMY-BLUEPRINT.md`.
 
+## Autonomy Blueprint — Phase 1 (2026-06-18) — OWNER OPS to flip it live
+Phase 1 CODE is built + merged on `staging` (Stripe billing + subscription gating; auth password-reset + SECRET_KEY/seed hardening + login rate-limit; LLM cost spine = Sonnet/Haiku + prompt caching + token ledger + per-tenant dollar cap; usage "conversations" fuel gauge; SF-6 quiet-hours backstop + START re-opt-in). 28/28 test files green; billing/auth security spot-check passed. Owner ops to flip live:
+- **Stripe account (test mode first):** set `STRIPE_API_KEY=sk_test_…`, `STRIPE_WEBHOOK_SECRET=whsec_…`, create 3 Price IDs ($99/$199/$399) and wire them in. (Code is built + tested against mocked Stripe; nothing hits Stripe until these are set.)
+- **Set `CLAUDE_DAILY_COST_CAP_USD`** if you want a per-tenant daily AI spend cap other than the $1.00 default.
+- **`be-audit` before any production deploy** of the `/webhooks/stripe` + `/auth/reset` paths (money/security gate). Minor P2: wrap `get_llm_spend_today` to fail-open.
+- Phase-0 ops above still pending (Render env, cron, Resend, voice decision).
+
 ## Command Center — Phase 0 (the "honest hands") — what's live vs. gated
 The `/dashboard` command center was hardened (see `BRAIN.md` for the full vision). Phase 0
 needs **no new external accounts**; it works keyless in the demo brain. Notes:
