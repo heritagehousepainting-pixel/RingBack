@@ -77,35 +77,56 @@ def _system_prompt(business, slots):
         slot_lines = "\n".join(f"  - {s['label']}  (id: {s['id']})" for s in slots)
     else:
         slot_lines = "  (no open windows in the next few weeks)"
+    spanish_rule = ""
+    if business.get("spanish_enabled", True):
+        spanish_rule = (
+            "- Language: detect the language the caller writes in. If they write in Spanish, "
+            "reply in Spanish for the whole conversation (the slot offers and the booking "
+            "confirmation too). Switch back if they switch to English.\n"
+        )
     return (
         f"{business['ai_instructions']}\n\n"
         f"Business: {business['name']}, {business['trade']}.\n"
         f"Service area: {business['service_area']}. Hours: {business['hours']}.\n"
         f"Available estimate slots you may offer (soonest first):\n{slot_lines}\n\n"
         "RULES:\n"
-        "- Tone: professional, clear, and courteous. Write in complete sentences with "
-        "correct grammar. Be friendly but not casual. No slang, no filler, no emoji.\n"
-        "- Punctuation: use standard punctuation only. Do NOT use dashes of any kind "
-        "(no em dashes, no en dashes, no double hyphens). Use periods, commas, and "
-        "semicolons instead.\n"
-        "- Ask one thing at a time. Do not send a form or a long list.\n"
-        "- Answer the caller's real questions (about the company, what you do, hours, "
-        "pricing) before guiding them toward scheduling.\n"
-        "- Only offer times from the available slots listed above; never invent a time. "
-        "When you offer windows, state them in plain words (for example, 'Monday at "
-        "9:00 AM'); never show the id to the caller.\n"
-        "- To confirm the service area, ask the caller for their address once, phrased "
-        "simply (for example, 'What is the address?'). Do not ask for their name or "
-        "phone number, and do not request other personal details.\n"
-        "- Booking is the goal. As soon as the caller agrees to a specific time, your "
-        "entire reply must be a brief, warm confirmation that names the chosen time in "
-        "words, followed by a hidden marker on its own final line, in EXACTLY this "
-        "format, using the id of the slot the caller actually chose:\n"
-        "  [[BOOK: 2026-06-15@14:00]]\n"
-        "  Use the id exactly as written next to that slot above. The customer never "
-        "sees this marker. It is the only way our system books the appointment; without "
-        "it, nothing is booked. After they have agreed, do not ask any further questions."
+        "- Sound like a sharp, friendly person who actually works here, not a chatbot or a "
+        "form. Warm, brief, direct. One or two short sentences per text.\n"
+        "- Punctuation: standard only. Do NOT use dashes of any kind (no em dashes, no en "
+        "dashes, no double hyphens). Use periods, commas, and semicolons. No emoji.\n"
+        "- Ask one thing at a time. Never send a form or a long list. Check the conversation "
+        "first; never re-ask for anything the caller already gave you (address, job, name).\n"
+        "- Price questions: never dodge them. Say honestly that the number depends on what we "
+        "see in person so the quote is accurate, then in the SAME message pivot to offering "
+        "the free estimate. For example: 'It depends on the scope, so we quote in person to "
+        "get it right. The estimate is free; can I get you on the calendar?' Do not apologize "
+        "or say you cannot help.\n"
+        "- Only offer times from the slots listed above; never invent a time. State them in "
+        "plain words (for example, 'Monday at 9:00 AM'); never show the id to the caller.\n"
+        "- Confirm the area by asking for the address once ('What's the address?'). Do not ask "
+        "for their name or phone number.\n"
+        + spanish_rule +
+        "- Booking is the goal. The moment the caller agrees to a specific time, your entire "
+        "reply is a brief, warm confirmation that names the time in words, then a hidden marker "
+        "on its own final line in EXACTLY this format, naming the slot they chose:\n"
+        "  [[BOOK: Monday Jun 22 at 9:00 AM]]\n"
+        "  Copy that slot's label (or its id) exactly as written above. The customer never sees "
+        "the marker; it is the only way the appointment books. After they agree, ask nothing further."
     )
+
+
+_URGENCY_INJECTION = (
+    "\n\nURGENT SITUATION: the caller described an emergency or time-sensitive problem. "
+    "Skip the standard qualifying flow. In your FIRST reply: (1) acknowledge the emergency "
+    "directly and warmly, (2) confirm we handle it, (3) immediately offer the SOONEST available "
+    "slot (lead with today or tomorrow if there is one). Do not ask for the address first and "
+    "do not run the normal qualifier; the address can come after they agree to a time."
+)
+
+
+def _system_prompt_urgent(business, slots):
+    """System prompt variant for urgent/emergency inbound messages (skip-the-qualifier path)."""
+    return _system_prompt(business, slots) + _URGENCY_INJECTION
 
 
 def _to_turns(history):
@@ -125,19 +146,24 @@ def _to_turns(history):
     return turns
 
 
-def _minimax_reply(business, history, slots):
+def _minimax_reply(business, history, slots, is_urgent=False):
     """MiniMax via its OpenAI-compatible chat-completions endpoint."""
-    return _complete("minimax", _system_prompt(business, slots), _to_turns(history),
+    prompt = _system_prompt_urgent(business, slots) if is_urgent else _system_prompt(business, slots)
+    return _complete("minimax", prompt, _to_turns(history),
                      max_tokens=512, temperature=1.0)
 
 
-def _claude_reply(business, history, slots, lead_id=None):
+def _claude_reply(business, history, slots, lead_id=None, is_urgent=False):
     """Call Claude for an SMS reply and log token usage to the ledger."""
     # Pre-deploy I1: bound the call (timeout=30). This runs ON the inbound-SMS webhook
     # worker -- a hung Anthropic call would otherwise wedge it for the SDK's 600s default
     # and make Twilio retry the webhook. The caller falls back on any failure.
-    text, usage = _complete("claude", _system_prompt(business, slots), _to_turns(history),
-                            max_tokens=300, return_usage=True, timeout=30)
+    # Batch B: max_tokens 300->450 (the visible length guard is the real ceiling; MiniMax
+    # already gets 512) so a full qualify+offer turn never truncates. is_urgent picks the
+    # skip-the-qualifier prompt for emergencies.
+    prompt = _system_prompt_urgent(business, slots) if is_urgent else _system_prompt(business, slots)
+    text, usage = _complete("claude", prompt, _to_turns(history),
+                            max_tokens=450, return_usage=True, timeout=30)
     try:
         db.log_llm_usage(business["id"], "sms", usage.get("model", CLAUDE_MODEL),
                          usage.get("input_tokens", 0), usage.get("output_tokens", 0),
@@ -464,6 +490,17 @@ def _apply_length_guard(text):
     return chunk.rstrip() + "..."
 
 
+def instant_opener(business):
+    """Batch B: zero-latency first text-back -- NO LLM call. open_conversation is only ever
+    called on an empty thread (turn 0), where the caller hasn't said anything yet, so a cold
+    Claude call added 5-30s of latency before the first SMS landed (and every second after a
+    missed call costs reply rate). Returns (text, None) -- never books on the opener; the LLM
+    takes over from turn 1 when the caller has actually said something."""
+    name = (business.get("name") or "us").strip()
+    return (f"Hi, this is {name}. Sorry we just missed your call! What can we help you with? "
+            "We'd love to get you booked for a free estimate."), None
+
+
 def generate_reply(business, history, exclude_slot_ids=None, lead_id=None):
     """Returns (visible_text, booking_slot_or_None). `exclude_slot_ids` is an
     optional set of slot ids from a connected external calendar to treat as
@@ -486,13 +523,17 @@ def generate_reply(business, history, exclude_slot_ids=None, lead_id=None):
         return handoff, None
 
     slots = _open_slots(business["id"], exclude_ids=exclude_slot_ids)
+    # Batch B urgency fast-path: check only the LATEST inbound message (not the whole
+    # history, so a resolved emergency from turn 1 doesn't keep re-triggering).
+    _inbound = [m for m in history if m.get("direction") == "in"]
+    is_urgent = bool(_inbound and detect_urgency(_inbound[-1].get("body", "")))
     provider = _active_provider()
     raw = None
     try:
         if provider == "claude":
-            raw = _claude_reply(business, history, slots, lead_id=lead_id)
+            raw = _claude_reply(business, history, slots, lead_id=lead_id, is_urgent=is_urgent)
         elif provider == "minimax":
-            raw = _minimax_reply(business, history, slots)
+            raw = _minimax_reply(business, history, slots, is_urgent=is_urgent)
     except Exception as e:
         # Any API/network error -> log and fall back so the app never breaks.
         import sys

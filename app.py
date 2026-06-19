@@ -110,14 +110,14 @@ def require_twilio_signature(view):
 def _default_ai_instructions(name, trade):
     """Generic per-business instructions for a freshly signed-up tenant."""
     return (
-        f"You are the assistant for {name}, a {trade} business, replying by text to "
-        "a caller we just missed. Use a professional, clear, and courteous tone with "
-        "complete sentences and correct grammar. Be personable but not casual: no "
-        "slang, no filler, and no emoji. Keep each reply concise, about one to three "
-        "sentences. First find out what they need, then ask for their address to "
-        "confirm they are in your service area, then offer two available estimate "
-        "windows and book the one they choose. Never quote prices or give a dollar "
-        "range; let them know you will provide a quote at the free in-person estimate."
+        f"You are the assistant for {name}, a {trade} business, texting back a caller we "
+        "just missed. Sound like a sharp, friendly person who works here, not a chatbot or "
+        "a form. Your job: make the caller feel heard, confirm you can help, and get them "
+        "booked for a free estimate. Warm, brief, direct. One or two sentences per text, and "
+        "ask only one thing at a time. If they have already told you what they need and "
+        "roughly where they are, skip those questions and go straight to offering estimate "
+        "windows. Never dodge a price question: say honestly that you quote in person so the "
+        "number is accurate, then offer to book the free estimate."
     )
 
 
@@ -1736,8 +1736,12 @@ def open_conversation(biz, lead):
     # -> alert the owner. Off the hot path; a no-op if alerts are off/unconfigured.
     alerts.notify_async(biz, "lead", {"lead_id": lead["id"], "name": lead.get("name"),
                                       "phone": lead.get("phone")})
-    exclude = google_cal.busy_slot_ids(biz["id"])  # empty unless Google connected
-    reply, booking = ai.generate_reply(biz, [], exclude_slot_ids=exclude)
+    # Batch B: turn 0 has no caller input yet, so a cold LLM call (5-30s) only added latency
+    # before the first text landed -- and every second after a missed call costs reply rate.
+    # Send a zero-latency hardcoded opener; the LLM takes over from turn 1 (handle_inbound)
+    # once the caller has said something. booking is always None here (no slot named yet),
+    # so the booking block below is correctly skipped.
+    reply, booking = ai.instant_opener(biz)
     db.add_message(lead["id"], "out", reply)
     if booking:
         if db.book_appointment(biz["id"], lead["id"], booking):
@@ -2608,6 +2612,15 @@ def _missed_call_textback(biz, caller, call_sid="", dial_status=""):
     # owner can trust the numbers before enforcing. Only 'enforce' actually suppresses.
     if not verdict["engage"] and mode == "enforce":
         db.log_call(biz["id"], call_sid, engaged=0, **common)
+        # Batch B: a TRUSTED past customer was intentionally not auto-texted (the owner
+        # handles them personally) -- but a silent drop means the owner may never know they
+        # called. Alert the owner so they can ring back. Spam/opted-out callers get NO alert.
+        if verdict.get("status") == "trusted":
+            _kc_lead = db.get_lead_by_phone(biz["id"], caller)
+            alerts.notify_async(biz, "lead", {
+                "lead_id": _kc_lead["id"] if _kc_lead else None,
+                "name": _kc_lead.get("name") if _kc_lead else None,
+                "phone": caller, "known": True})
         return False
     lead = db.get_lead_by_phone(biz["id"], caller)
     if not lead:

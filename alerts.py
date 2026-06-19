@@ -77,6 +77,11 @@ def format_message(kind, context):
     phone = (context.get("phone") or "").strip()
     tail = f" {phone}" if phone else ""
     if kind == "lead":
+        # Batch B: a trusted past customer who was screened out (no auto-text) -- the owner
+        # needs to know they called so they can ring back personally.
+        if context.get("known"):
+            return (f"Past customer{tail} just called. We didn't auto-text them (you handle "
+                    f"your regulars). Give them a ring when you get a chance.")
         proj = (context.get("project") or "").strip()
         about = f' about "{proj}"' if proj else ""
         return f"New lead: {who}{tail}{about}. Open FirstBack to reply."

@@ -69,16 +69,19 @@ def when_phrase(day_iso, slot_time):
 
 
 # ---- Copy (pure) ----
-def reminder_body(name, business_name, when):
-    return (f"Hi {_first_name(name)}, this is {business_name}. A friendly reminder of "
-            f"your free estimate {when}. We look forward to seeing you, and you can "
-            "reply here if anything has changed.")
+def reminder_body(name, business_name, when, phone=None):
+    # Batch B: warmer, plainer, and gives a direct number so a day-of question doesn't have
+    # to route back through the AI. phone is optional -> degrades gracefully when unset.
+    phone_line = f" Questions or need to reschedule? Call us at {phone} or just reply here." \
+        if phone else " Questions or need to reschedule? Just reply here."
+    return (f"Hi {_first_name(name)}! Quick reminder: {business_name} is coming {when} for "
+            f"your free estimate.{phone_line}")
 
 
-def followup_body(name, business_name):
-    return (f"Hi {_first_name(name)}, this is {business_name} following up on your "
-            "project. Would you like to set up your free estimate? We are happy to "
-            "find a time that works for you.")
+def followup_body(name, business_name, phone=None):
+    contact = f" Call or text us at {phone}." if phone else " Just reply here."
+    return (f"Hi {_first_name(name)}, {business_name} here, still happy to get you a free "
+            f"estimate.{contact} What day works best?")
 
 
 # ---- Scheduling math (pure) ----
@@ -168,7 +171,7 @@ def enqueue_reminder(business, lead, day_iso, slot_time):
     send_at = compute_send_at(day_iso, slot_time, _lead_hours(business), tz,
                               QUIET_START, QUIET_END)
     body = reminder_body(lead.get("name"), business.get("name") or "your contractor",
-                         when_phrase(day_iso, slot_time))
+                         when_phrase(day_iso, slot_time), phone=business.get("phone") or None)
     db.cancel_lead_pending_reminders(lead["id"])
     db.add_scheduled_message(business["id"], lead["id"], appt["id"], "reminder",
                              send_at, body)
@@ -219,7 +222,7 @@ def enqueue_morning_reminder(business, lead, day_iso, slot_time):
         pass  # db.find_scheduled_message not yet available (A1); safe no-op
     send_at = morning_local.astimezone(timezone.utc).isoformat()
     body = reminder_body(lead.get("name"), business.get("name") or "your contractor",
-                         when_phrase(day_iso, slot_time))
+                         when_phrase(day_iso, slot_time), phone=business.get("phone") or None)
     db.add_scheduled_message(business["id"], lead["id"], appt["id"], "morning_reminder",
                              send_at, body)
     return {"status": "queued", "send_at": send_at}
@@ -384,7 +387,7 @@ def run_due_once(now=None):
     return sent
 
 
-def followup_body_contextual(name, biz_name, last_in_text):
+def followup_body_contextual(name, biz_name, last_in_text, phone=None):
     """Phase 5e M1: Contextual Touch-1 copy via Sonnet. Falls back to the generic
     template on any LLM failure (network, rate-limit, bad output). The fallback
     ensures the follow-up always goes out even without an API key."""
@@ -415,7 +418,7 @@ def followup_body_contextual(name, biz_name, last_in_text):
             return text
     except Exception:
         pass
-    return followup_body(name, biz_name)
+    return followup_body(name, biz_name, phone=phone)
 
 
 def scan_followups(now=None):
@@ -447,7 +450,8 @@ def scan_followups(now=None):
                 biz_name = biz.get("name") or "your contractor"
                 last_in_text = lead.get("last_in_text")
                 # M1: Use contextual Sonnet copy; falls back to generic template.
-                body = followup_body_contextual(lead.get("name"), biz_name, last_in_text)
+                body = followup_body_contextual(lead.get("name"), biz_name, last_in_text,
+                                                phone=biz.get("phone") or None)
                 t1_id = db.add_scheduled_message(biz["id"], lead["id"], None, "followup",
                                                   send_at, body)
                 if t1_id is not None:

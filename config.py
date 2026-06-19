@@ -50,10 +50,14 @@ CLAUDE_MODEL_VOICE = os.environ.get("CLAUDE_MODEL_VOICE", "claude-haiku-4-5")
 # Per-tenant dollar daily spending cap on the AI-reply path. Past this the bot
 # degrades honestly ("resting" message) rather than silently breaking. Zero = no cap.
 try:
+    # Batch B: $1 -> $5. At Sonnet pricing a turn is ~$0.003-0.006, so $1 (=~170-330 turns)
+    # could be hit by midday on a busy contractor's rainy Monday and start returning the
+    # "resting" message -- which reads as broken. $5 (~850-1,650 turns) covers the busiest
+    # day; the cap is a cost safeguard, not a business gate. Env override unchanged.
     CLAUDE_DAILY_COST_CAP_USD = float(
-        os.environ.get("FIRSTBACK_DAILY_COST_CAP", "") or "1.00")
+        os.environ.get("FIRSTBACK_DAILY_COST_CAP", "") or "5.00")
 except (TypeError, ValueError):
-    CLAUDE_DAILY_COST_CAP_USD = 1.00
+    CLAUDE_DAILY_COST_CAP_USD = 5.00
 
 # --- Call screening (the "phone screen") ----------------------------------
 # FirstBack texts back every missed caller. Two callers should NOT get that bot
@@ -546,16 +550,17 @@ DEFAULT_BUSINESS = {
     "phone": "(555) 314-2270",
     # The AI uses this to sound like YOUR business and to know what to ask.
     # >>> THIS IS WHERE YOU ADD YOUR LOGIC AND FLOW <<<
+    # Batch B: when True, the AI auto-detects Spanish-speaking callers and replies in Spanish.
+    "spanish_enabled": True,
     "ai_instructions": (
-        "You are the assistant for Heritage House Painting, replying by text to a "
-        "caller we just missed. Use a professional, clear, and courteous tone with "
-        "complete sentences and correct grammar. Be personable but not casual: no "
-        "slang, no filler, and no emoji. Keep each reply concise, about one to three "
-        "sentences. First find out what they would like painted. Next, ask for their "
-        "address so we can confirm they are within our service area. Then offer two of "
-        "our available estimate windows and book the one they choose. Never quote prices "
-        "or give a dollar range; let them know we will provide a quote at the free "
-        "in-person estimate."
+        "You are the assistant for Heritage House Painting, texting back a caller we just "
+        "missed, on behalf of Jonathan. Sound like a sharp, friendly person who works here, "
+        "not a chatbot or a form. Your job: make the caller feel heard, confirm we can help, "
+        "and get them booked for a free estimate. Warm, brief, direct. One or two sentences "
+        "per text, and ask only one thing at a time. If they have already told you what they "
+        "need and roughly where they are, skip those questions and go straight to offering "
+        "estimate windows. Never dodge a price question: say honestly that we quote in person "
+        "so the number is accurate, then offer to book the free estimate."
     ),
     # NOTE: the AI's availability now comes from the in-house calendar
     # (db.upcoming_slots over ESTIMATE_TIMES, skipping busy/taken days). The old
