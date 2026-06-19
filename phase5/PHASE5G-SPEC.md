@@ -567,5 +567,84 @@ BUILD NOW vs DEFER:
   actively damages Dave's reputation with homeowners.
 
 ----------------------------------------------------------------------
+9. RECONCILED BUILD PLAN (post 2-agent audit -- LOCKED)
+----------------------------------------------------------------------
+Audit reports: phase5/audit/5G-AUDIT-ARCH.md + 5G-AUDIT-SAFETY.md.
+Gate integrity CONFIRMED: no build slice touches render.yaml, FIRSTBACK_VOICE_URL,
+config.py URL assignment, or pricing templates. Voice stays gated on VOICE_PUBLIC_URL
+(unset). Pricing stays "coming soon". This build is CODE-COMPLETE-BEHIND-THE-GATE only.
+
+### Two P0 design corrections (override the body above):
+P0-1 (model): `llm.tool_complete_stream` HARDCODES CLAUDE_MODEL (Sonnet) -- it has no
+  `model` param. The voice stream MUST run on Haiku. Slice 2 adds a `model=None` param
+  to tool_complete_stream (defaults to CLAUDE_MODEL when None -> no change for existing
+  callers) and a `complete_stream_voice(...)` wrapper that passes CLAUDE_MODEL_VOICE.
+P0-2 (booking write): do NOT call handle_inbound mid-stream on first [[BOOK]] -- that
+  fires a SECOND LLM call and risks a double-book. The /internal/voice/stream endpoint is
+  UX-ONLY (streams Haiku tokens for fast first-word). The actual booking/commit happens
+  ONCE at stream END: voice_service.py, after the stream completes, POSTs the full final
+  text to the EXISTING /internal/voice/turn (app.py:2716) which runs the booking path
+  exactly as today. Stream = speak fast; turn = commit once. No double LLM, no double-book.
+
+### LOCKED 4-slice FILE-DISJOINT partition (no two agents edit the same file):
+  SLICE 1 -- voice_service.py ONLY
+    /ws streaming client (filler frame -> stream tokens -> last=True), barge-in cancel_flag,
+    ASR empty-counter (M-2), turn_log accumulation (M-3), post-call recovery SMS on
+    WebSocketDisconnect per outcome (M-5). Calls app.py endpoints over HTTP (contract below).
+  SLICE 2 -- llm.py + config.py ONLY
+    tool_complete_stream `model=None` param + `complete_stream_voice()` (Haiku); M-4
+    confirmation-echo voice system-prompt instruction; VOICE_MONTHLY_CAP_CENTS=2000 +
+    VOICE_CREDIT_RATE_CENTS=25 constants.
+  SLICE 3 -- db.py + messaging.py ONLY
+    voice_calls table + 4 helpers (insert_voice_call, update_voice_call_outcome,
+    last_voice_call_at, voice_spend_this_month); place_call adds MachineDetection="Enable",
+    AsyncAmd="true", and auto-fills StatusCallback from PUBLIC_BASE_URL when set.
+  SLICE 4 -- app.py ONLY (5 non-overlapping regions)
+    R1 STOP/detect_revocation/cancel-opt-out all also set_voice_consent(False);
+    R2 pre-call guard block (ORDER: consent voice_ok -> quiet-hours -> spam_score>=SCREEN_SCORE_HARD
+       -> 60-min last_voice_call_at de-dupe -> monthly cost cap; any fail -> text, never call;
+       "Calling you now" ONLY when place_call returns 'placed');
+    R3 /internal/voice/stream (SSE, secret-gated, Haiku, UX-only -- NO booking write);
+    R4 /internal/voice/turn_log (secret-gated; writes [VOICE] transcript as direction='system',
+       NO raw phone in body);
+    R5 /webhooks/twilio/voice/status (Twilio-signed; AnsweredBy machine_* -> voicemail +
+       recovery SMS + no spoken pitch; real CallDuration -> cost; update voice_calls).
+
+### CROSS-FILE CONTRACT (agents build against these stubs):
+  - llm: `tool_complete_stream(..., model=None)` ; `complete_stream_voice(messages_or_prompt)
+    -> Iterator[str]` (model=CLAUDE_MODEL_VOICE).  [Slice 2 exposes; Slice 4 R3 consumes]
+  - db: `insert_voice_call(biz_id, lead_id, twilio_sid)->id`,
+    `update_voice_call_outcome(twilio_sid, outcome, duration, cost_cents)`,
+    `last_voice_call_at(biz_id, caller)->iso|None` (None-safe if table absent),
+    `voice_spend_this_month(biz_id)->cents`.  [Slice 3 exposes; Slice 4 R2/R5 consume]
+  - messaging: `place_call(business, to, twiml_url, status_callback=None)` now self-fills
+    StatusCallback + AMD.  [Slice 3; Slice 4 R2 calls]
+  - app endpoints: `POST /internal/voice/stream` (req {biz,lead,text,history}; resp SSE
+    {"delta":t}.. {"done":true,"full":text}); `POST /internal/voice/turn_log`
+    (req {biz,lead,turns:[...]} ); existing `POST /internal/voice/turn` reused for the
+    booking commit.  [Slice 4 exposes; Slice 1 consumes over HTTP]
+
+### BUILD / MERGE ORDER (4 agents, 3 waves):
+  WAVE 1 (parallel): Slice 2 (llm+config) + Slice 3 (db+messaging)  -- independent.
+  -> merge both, full suite green.
+  WAVE 2: Slice 4 (app.py)  -- depends on Slice 2 + Slice 3 symbols.
+  -> merge, full suite green.
+  WAVE 3: Slice 1 (voice_service.py)  -- depends on Slice 4's /internal/voice/stream + turn_log.
+  -> merge, full suite green.
+  (Each later wave's worktree is cut from the post-merge base so the symbols exist.)
+
+### WHAT STAYS DEPLOY-GATED (NOT unit-testable here -- do not pretend):
+  Real <1.5s first-word latency (Check 3), real barge-in (Check 4), real voicemail drop
+  (Check 5), real end-to-end call (Check 2), the ear-test (Check 7). Unit tests verify
+  SHAPE/wiring only (frame JSON, cancel-flag stops emission, guard order, cost math,
+  AMD params present, voicemail->SMS, transcript shape). The 7-check gate is the firewall.
+
+### MUST REMAIN TRUE AFTER THE BUILD (honesty invariants):
+  - Voice not live, no tenant activated, pricing still "coming soon".
+  - No call placed without consent + quiet-hours + spam + dedupe + cap all passing.
+  - No booking pitch spoken into voicemail. Cost cap enforced before dial. Real metering.
+  - "Calling you now" only on place_call 'placed'. Transcripts carry no raw phone numbers.
+
+----------------------------------------------------------------------
 END OF SPEC
 ----------------------------------------------------------------------
