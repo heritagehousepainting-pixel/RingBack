@@ -28,13 +28,14 @@ import mail
 import messaging
 
 ALERT_KINDS = ("lead", "booking", "urgent", "canceled", "sms_fail", "forwarding_lost",
-               "roi_milestone", "vic_morning", "vic_stall", "screening_graduated")
+               "roi_milestone", "vic_morning", "vic_stall", "screening_graduated",
+               "growth_tray")
 # Collapse identical alerts (same business + event) within this many seconds.
 ALERT_DEDUPE_SECONDS = 120
 # Proactive daily pushes (day-stamped keys) collapse over the whole local day, not 120s --
 # the ticker fires every few minutes, so a short window would re-send them on each pass.
 _DAILY_DEDUPE_SECONDS = 26 * 3600
-_DAILY_DEDUPE_KINDS = ("vic_morning", "vic_stall")
+_DAILY_DEDUPE_KINDS = ("vic_morning", "vic_stall", "growth_tray")
 # Graduation fires once per business lifetime (the mode flips once), so dedupe
 # over a very long window to prevent any edge-case re-fire.
 _LONG_DEDUPE_SECONDS = 365 * 24 * 3600
@@ -51,7 +52,9 @@ _TOGGLE_COL = {"lead": "alert_on_lead", "booking": "alert_on_booking",
                "vic_morning": "alert_on_lead", "vic_stall": "alert_on_lead",
                # Graduation is an operational owner notification: no new column needed,
                # rides the urgent toggle (owner needs to know their filter went live).
-               "screening_graduated": "alert_on_urgent"}
+               "screening_graduated": "alert_on_urgent",
+               # Growth tray digest (5d BETA): rides the lead-alert toggle -- no new column needed.
+               "growth_tray": "alert_on_lead"}
 _PLACEHOLDER_NAMES = {"", "new caller", "homeowner", "unknown", "the caller", "caller"}
 
 
@@ -126,6 +129,30 @@ def format_message(kind, context):
         return (f"Spam blocking is now ON -- this week we'd have blocked {n} "
                 f"{robocaller_word} and you rescued none. "
                 f"Manage or pause it in Settings.")
+    if kind == "growth_tray":
+        # 8am tray digest to the owner: honest count, money (labeled if estimated),
+        # clear GO/SKIP instructions. Never claims a text was sent.
+        count = context.get("count", 0)
+        total_str = (context.get("total_str") or "").strip()
+        plays_summary = (context.get("plays_summary") or "").strip()
+        is_estimated = context.get("is_estimated", False)
+        estimated = " (estimated)" if is_estimated else ""
+        s = "s" if count != 1 else ""
+        base = (f"Good morning. {count} text{s} ready: {plays_summary}. "
+                f"~{total_str} on the table{estimated}. "
+                f"Reply GO to send all, SKIP to hold.")
+        # Cap at 320 chars; truncate plays_summary first (keep the GO/SKIP line).
+        if len(base) > 320:
+            instr = (f"~{total_str} on the table{estimated}. "
+                     f"Reply GO to send all, SKIP to hold.")
+            prefix = f"Good morning. {count} text{s} ready: "
+            budget = 320 - len(prefix) - len(instr) - 2  # 2 for ". "
+            if budget > 5 and plays_summary:
+                short = plays_summary[:budget].rsplit(",", 1)[0]
+                base = prefix + short + ". " + instr
+            else:
+                base = prefix.rstrip() + ". " + instr
+        return base
     return f"FirstBack alert ({kind})."
 
 
@@ -139,7 +166,8 @@ def _subject(kind):
             "roi_milestone": "FirstBack paid for itself -- FirstBack",
             "vic_morning": "Your morning briefing -- FirstBack",
             "vic_stall": "Lead still waiting -- FirstBack",
-            "screening_graduated": "Spam Shield is now active -- FirstBack"}.get(kind, "FirstBack alert")
+            "screening_graduated": "Spam Shield is now active -- FirstBack",
+            "growth_tray": "Your morning growth tray -- FirstBack"}.get(kind, "FirstBack alert")
 
 
 def _enabled_for(business, kind):
@@ -163,6 +191,10 @@ def _dedupe_key(kind, context):
         lead_id = context.get("lead_id", "")
         day = (context.get("local_day") or "").strip()
         return f"vic_stall:{lead_id}:{day}"
+    if kind == "growth_tray":
+        # Day-stamped: one digest per business per local calendar day (26h window).
+        day = (context.get("local_day") or "").strip()
+        return f"growth_tray:{day}"
     if kind == "screening_graduated":
         return "screening_graduated"
     base = f"{kind}:{context.get('lead_id')}"
