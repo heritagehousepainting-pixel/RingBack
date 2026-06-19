@@ -320,6 +320,29 @@ and forwarding is confirmed).
   "cancel anytime / no per-call fees" promises in pricing/FAQ are actually enforceable.
 - If you want a real free trial, add trial copy + logic and the CTAs can say "Start free trial".
 
+## Phase 6a hardening (2026-06-19) — OWNER OPS now ENFORCED by the code
+The 6a pre-launch hardening shipped (commit 70f585c). Two new env requirements are now
+**fail-fast in production** — the app will refuse to boot or warn loudly if they're wrong:
+- **`FIRSTBACK_TOKEN_KEY` is now REQUIRED in production.** If `FIRSTBACK_HTTPS=1` (or
+  `FIRSTBACK_ENV=production`) is set and `FIRSTBACK_TOKEN_KEY` is empty, boot raises a
+  RuntimeError (was: silent plaintext Google OAuth tokens). Set any long random string,
+  different from `FIRSTBACK_SECRET`. If you launch text-only (no Google yet), still set it
+  to any non-empty value.
+- **Set `FIRSTBACK_HTTPS=1` (or `FIRSTBACK_ENV=production`) on Render.** Without one of these
+  the existing `FIRSTBACK_SECRET` fail-fast can't fire, the Secure cookie flag stays off, AND
+  the new TOKEN_KEY guard above stays inert — i.e. the prod safety net only arms when one of
+  these is set. This is the single most important env flag for the security posture.
+- **Set all 6 `STRIPE_PRICE_*` IDs before the first real subscriber.** If a live invoice's
+  price_id isn't in the env, the code now logs a **BILLING WARNING** to stderr and emails the
+  owner (it no longer silently downgrades a Pro/Crew renewal to starter) — but the customer is
+  still granted starter until you fix the env, so watch for that email/log.
+- **Deferred (defense-in-depth, NOT a launch blocker):** the authenticated config forms
+  `settings/growth_mode`, `setup/*`, `training/*` don't yet carry the `_csrf` double-submit
+  token. They're protected by the active `SameSite=Lax` session cookie (cross-site POSTs drop
+  the cookie) and password-change already requires the current password. A full form-CSRF
+  sweep is a tracked follow-up; the customer-facing/graduation endpoints (call/lead family +
+  growth-tray sends) ARE now CSRF-guarded.
+
 ## Optional cleanup flagged by the audit
 - Delete the dead, unrouted `landing.html` (still contains the old Jobber/Housecall/Angi
   logos; harmless since it isn't served, but worth removing — roadmap already flags it).
