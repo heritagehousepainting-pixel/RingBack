@@ -409,15 +409,21 @@ _rconn.execute("INSERT INTO messages (lead_id, direction, body, created_at) VALU
                (_rl, "in", "any update?", _old))
 _rconn.commit(); _rconn.close()
 
-_before = len(_ALL_SMS_RECIPIENTS)
+# Count only THIS regression business's nudges (its own owner cell) -- the scan is global
+# across every business in the shared temp DB, and other test businesses' leads cross the
+# 24h idle threshold as wall-clock advances, so a global count is non-deterministic.
+_OWN = "+15550009999"
+def _own_nudges():
+    return sum(1 for r in _ALL_SMS_RECIPIENTS if r == _OWN)
+_before = _own_nudges()
 reminders.scan_stall_nudges()
-_after_first = len(_ALL_SMS_RECIPIENTS)
+_after_first = _own_nudges()
 _bconn = db.get_conn()
 _back = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
-_bconn.execute("UPDATE alerts SET created_at=? WHERE dedupe_key LIKE 'vic_stall:%'", (_back,))
+_bconn.execute("UPDATE alerts SET created_at=? WHERE dedupe_key LIKE ?", (_back, f"vic_stall:{_rl}:%"))
 _bconn.commit(); _bconn.close()
 reminders.scan_stall_nudges()   # 10 min later -> must STILL dedupe
-_after_second = len(_ALL_SMS_RECIPIENTS)
+_after_second = _own_nudges()
 check("stall nudge fired once for the idle lead", _after_first - _before == 1)
 check("daily dedupe holds across a >120s ticker gap (no re-send)",
       _after_second == _after_first)
