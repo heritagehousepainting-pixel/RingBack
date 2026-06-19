@@ -293,6 +293,10 @@ def _enqueue_retry(biz, row, attempt):
               file=sys.stderr, flush=True)
 
 
+# 5d BETA B3: Growth kinds whose delivery should be logged for frequency-cap tracking.
+GROWTH_KINDS = {"review_request", "quote_followup", "reactivation",
+                "winback", "referral", "membership"}
+
 def run_due_once(now=None):
     """Send every scheduled message that's due. Idempotent + defensive. Returns the
     count actually sent (or simulated). Handles kinds: reminder, morning_reminder,
@@ -345,6 +349,16 @@ def run_due_once(now=None):
                 db.mark_scheduled(row["id"], "failed")
                 attempt = int(row.get("retry_count") or 0) + 1
                 _enqueue_retry(biz, row, attempt)
+            # 5d BETA B3: On successful delivery of a growth-kind, write to growth_touch_log
+            # so the frequency cap (recent_growth_touch) reflects actual sends, not queue state.
+            if status in ("sent", "simulated") and kind in GROWTH_KINDS:
+                try:
+                    db.add_growth_touch_log(
+                        row["business_id"], row["lead_id"], kind,
+                        outcome=status, source="batch_approved")
+                except Exception as _gle:
+                    print(f"[firstback] growth_touch_log write failed: {_gle}",
+                          file=sys.stderr, flush=True)
         except Exception as e:
             db.mark_scheduled(row["id"], "failed")
             print(f"[firstback] scheduled send failed (id {row['id']}): {e}",
@@ -433,6 +447,79 @@ def scan_morning_briefing(now=None):
                 fired += 1
         except Exception as e:
             print(f"[firstback] morning briefing scan failed (biz {biz.get('id')}): {e}",
+                  file=sys.stderr, flush=True)
+    return fired
+
+
+
+def scan_growth_tray(now=None):
+    """5d BETA B2: Fire ONE 8am growth tray digest per business per local day when
+    there are held growth plays awaiting approval. Deduped via alerts.notify's
+    'growth_tray' kind (day-stamped 26h window). Returns count of digests fired.
+
+    The digest goes to business["alert_sms"] (owner cell) via gate=False --
+    A2P-exempt, same pattern as 5b morning digest. NEVER to a customer number."""
+    now = now or db.now_iso()
+    fired = 0
+    for biz in db.list_businesses():
+        try:
+            tz = _biz_tz(biz)
+            try:
+                now_local = datetime.fromisoformat(now).astimezone(tz)
+            except (TypeError, ValueError):
+                now_local = datetime.now(tz)
+            # Only fire in the [8, 9) window (8am local).
+            if not (8 <= now_local.hour < 9):
+                continue
+            local_day = now_local.strftime("%Y-%m-%d")
+            # Fetch held plays for this business.
+            try:
+                rows = db.list_held_messages(biz["id"])
+            except Exception as e:
+                print(f"[firstback] list_held_messages failed (biz {biz.get('id')}): {e}",
+                      file=sys.stderr, flush=True)
+                continue
+            if not rows:
+                continue  # nothing to send; don't wake owner with an empty digest
+            # Cap at 10 per batch-size spec (F13-FINAL SS4 G10).
+            rows = rows[:10]
+            count = len(rows)
+            # Assemble plays_summary: "1) Maria (review), 2) Carlos (win-back), ..."
+            _KIND_LABEL = {
+                "review_request": "review",
+                "quote_followup": "follow-up",
+                "reactivation": "reactivation",
+                "winback": "win-back",
+                "referral": "referral",
+                "membership": "membership",
+            }
+            parts = []
+            for i, r in enumerate(rows, 1):
+                name = (r.get("lead_name") or "Lead").split()[0]
+                label = _KIND_LABEL.get(r.get("kind", ""), r.get("kind", ""))
+                parts.append(f"{i}) {name} ({label})")
+            plays_summary = ", ".join(parts)
+            # Money total: use growth.py's _job_value logic (import lazily).
+            is_estimated = biz.get("avg_job_value") is None
+            try:
+                import growth as _growth
+                job_val = _growth._job_value(biz)
+            except Exception:
+                job_val = 2000  # generic fallback
+            total = job_val * count
+            total_str = f"~${total:,}"
+            ctx = {
+                "count": count,
+                "total_str": total_str,
+                "plays_summary": plays_summary,
+                "is_estimated": is_estimated,
+                "local_day": local_day,
+            }
+            result = alerts.notify(biz, "growth_tray", ctx)
+            if result:
+                fired += 1
+        except Exception as e:
+            print(f"[firstback] growth tray scan failed (biz {biz.get('id')}): {e}",
                   file=sys.stderr, flush=True)
     return fired
 
@@ -588,6 +675,11 @@ def tick_once(now=None):
         scan_morning_briefing(now)
     except Exception as e:
         print(f"[firstback] morning briefing tick failed: {e}", file=sys.stderr, flush=True)
+    # 5d BETA B2: growth tray 8am digest (held plays awaiting owner approval).
+    try:
+        scan_growth_tray(now)
+    except Exception as e:
+        print(f"[firstback] growth tray scan failed: {e}", file=sys.stderr, flush=True)
     # P1-3: warm-lead stall nudges (proactive owner push).
     try:
         scan_stall_nudges(now)
