@@ -116,8 +116,10 @@ check("money_left_behind headline shows the dollar figure",
 _ps = growth.plays(biz)
 check("plays are sorted by money, highest first",
       [p["money"] for p in _ps] == sorted([p["money"] for p in _ps], reverse=True))
-check("sendable plays carry a tap action that routes to a text",
-      all(p["action"].startswith("text ") for p in _ps if p["sendable"]))
+# Seasonal play is sendable but uses action="launch_seasonal_campaign" (cohort route, not per-lead).
+# All other sendable plays (per-lead) should route to a text action.
+check("sendable per-lead plays carry a tap action that routes to a text",
+      all(p["action"].startswith("text ") for p in _ps if p["sendable"] and p.get("lead_id") is not None))
 
 # --- Auto-scheduler: off by default, enqueues when opted in, dedupes on re-scan --------
 check("scan is a no-op when growth is not opted in", growth.scan()["queued"] == 0)
@@ -191,8 +193,13 @@ check("financing fires when avg job value clears the trade threshold (not sendab
 import datetime as _dtmod
 _seas_in = growth._seasonal_play(db.get_business(1), _dtmod.date(2026, 3, 1), 2000)
 _seas_out = growth._seasonal_play(db.get_business(1), _dtmod.date(2026, 7, 1), 2000)
+# Change 5: _seasonal_play is now sendable=True with action="launch_seasonal_campaign"
 check("seasonal play fires for HVAC inside its pre-peak window (March)",
-      _seas_in is not None and _seas_in["kind"] == "seasonal" and not _seas_in["sendable"])
+      _seas_in is not None and _seas_in["kind"] == "seasonal" and _seas_in["sendable"])
+check("seasonal play has launch action (not per-lead text action)",
+      _seas_in is not None and _seas_in.get("action") == "launch_seasonal_campaign")
+check("seasonal play carries the seasonal_service field",
+      _seas_in is not None and _seas_in.get("seasonal_service") == "AC tune-up")
 check("seasonal play stays silent outside its window (July)", _seas_out is None)
 
 # --- Tier routing: convert vs grow ------------------------------------------------------

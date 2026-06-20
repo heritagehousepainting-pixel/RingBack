@@ -44,6 +44,11 @@ _LONG_DEDUPE_SECONDS = 365 * 24 * 3600
 _LONG_DEDUPE_KINDS = ("screening_graduated",)
 # Plan 05-1: kinds that bypass owner quiet hours (fire-alarm level -- never held overnight).
 _URGENT_BYPASS_KINDS = frozenset({"urgent", "sms_fail", "forwarding_lost", "tick_stale"})
+# Scan-driven proactive pushes are ALREADY time-controlled by their scanner (8-9am or the
+# afternoon stall window), so the owner quiet-hours hold is redundant for them -- and would
+# otherwise double-gate against the wall clock. They never reach notify() at night in prod.
+_QUIET_BYPASS_KINDS = frozenset({"daily_digest", "monthly_recap", "growth_tray",
+                                 "vic_morning", "vic_stall", "screening_graduated"})
 
 
 def _biz_tz_for_alerts(business):
@@ -428,7 +433,7 @@ def notify(business, kind, context):
     # deferred (the 8am daily digest summarizes overnight leads). This NEVER touches the
     # customer TCPA backstop in messaging.send_sms -- that guards CUSTOMER texts; this guards
     # the OWNER's own phone. q_start == q_end means "no quiet hours" (window is empty).
-    if kind not in _URGENT_BYPASS_KINDS:
+    if kind not in _URGENT_BYPASS_KINDS and kind not in _QUIET_BYPASS_KINDS:
         local_h = datetime.now(_biz_tz_for_alerts(business)).hour
         q_start = _int_pref(business, "alert_quiet_start", 22)
         q_end = _int_pref(business, "alert_quiet_end", 7)

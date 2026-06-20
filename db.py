@@ -3932,3 +3932,83 @@ def won_leads(business_id, days=None):
             "WHERE business_id=? AND won_amount IS NOT NULL", (business_id,)).fetchone()
     conn.close()
     return {"confirmed_revenue": float(row[0]), "won_n": int(row[1])}
+
+
+def record_growth_go(business_id):
+    """E3c / 07-4: record a successful GO (batch release) for the streak counter, in
+    business-local calendar time. Same day -> no change; different day -> +1; gap >2 days
+    -> reset to 1. At STREAK_THRESHOLD (default 7), if not already unlocked, set
+    growth_streak_unlocked_at=now and flip growth mode to 'auto'. Returns {"streak","unlocked"}.
+    Never raises."""
+    import sys as _sys
+    try:
+        from config import biz_tz as _biz_tz, STREAK_THRESHOLD as _THRESH
+    except Exception:
+        _biz_tz, _THRESH = None, 7
+    try:
+        conn = get_conn()
+        row = conn.execute(
+            "SELECT growth_streak_count, growth_streak_last_at, growth_streak_unlocked_at "
+            "FROM businesses WHERE id=?", (business_id,)).fetchone()
+        conn.close()
+        if row is None:
+            return {"streak": 0, "unlocked": False}
+        current_count = row["growth_streak_count"] or 0
+        last_at_iso = row["growth_streak_last_at"]
+        unlocked_at = row["growth_streak_unlocked_at"]
+        now_utc = datetime.now(timezone.utc)
+        try:
+            biz = get_business(business_id)
+            tz = _biz_tz(biz) if (_biz_tz and biz) else app_tz()
+        except Exception:
+            tz = app_tz()
+        today_local = now_utc.astimezone(tz).date()
+        last_day_local = None
+        if last_at_iso:
+            try:
+                last_day_local = datetime.fromisoformat(last_at_iso).astimezone(tz).date()
+            except (ValueError, TypeError):
+                last_day_local = None
+        if last_day_local is None:
+            new_count = 1
+        elif today_local == last_day_local:
+            new_count = current_count
+        elif (today_local - last_day_local).days > 2:
+            new_count = 1
+        else:
+            new_count = current_count + 1
+        now_iso_str = now_utc.isoformat()
+        newly_unlocked = False
+        conn = get_conn()
+        if new_count >= _THRESH and not unlocked_at:
+            conn.execute(
+                "UPDATE businesses SET growth_streak_count=?, growth_streak_last_at=?, "
+                "growth_streak_unlocked_at=? WHERE id=?",
+                (new_count, now_iso_str, now_iso_str, business_id))
+            conn.commit()
+            conn.close()
+            set_growth_mode(business_id, 'auto')
+            newly_unlocked = True
+        else:
+            conn.execute(
+                "UPDATE businesses SET growth_streak_count=?, growth_streak_last_at=? WHERE id=?",
+                (new_count, now_iso_str, business_id))
+            conn.commit()
+            conn.close()
+        return {"streak": new_count, "unlocked": newly_unlocked}
+    except Exception as exc:
+        print(f"[record_growth_go] error: {exc}", file=_sys.stderr, flush=True)
+        return {"streak": 0, "unlocked": False}
+
+
+def recent_growth_touch_kind(business_id, kind, within_days):
+    """E3b / 07-5: True if any growth_touch_log row for (biz, kind) is within the last
+    within_days days. Kind-filtered variant of recent_growth_touch for the per-business
+    per-season seasonal-blast frequency cap (28-day window)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=within_days)).isoformat()
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT 1 FROM growth_touch_log WHERE business_id=? AND kind=? AND sent_at >= ? LIMIT 1",
+        (business_id, kind, cutoff)).fetchone()
+    conn.close()
+    return row is not None

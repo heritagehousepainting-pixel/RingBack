@@ -26,14 +26,17 @@ surfaces: digest, screening report, customer book, review-delta, milestones, str
 - [x] B — AI conversation + core loop (shipped, live `92aacde`)
 - [x] C — Mobile + dashboard UX (plan 04) — shipped to staging `6d0b67c`; 66/66 green; UI+BE audit fixes applied
 - [x] D — Alerts & set-and-forget (plan 05) — 67/67 green; TCPA backstop confirmed untouched; SSRF guard + _int_pref(0) bug fixed in audit
-- [~] E — Make value VISIBLE (plans 06+08+07) — sliced; building in coherent loops ← current
-  - [x] E1 — Customer Book page (07-2): /customers now authed; marketing moved to /resources/customer-stories; 68/68 green
-  - [~] E2 — monthly-recap spine, split:
-    - [x] E2a — progressive ROI milestones (07-3): roi_milestones table, multi-level roi.py (only moves up), back-compat, per-level dedupe; 69/69 green
-    - [ ] E2b — monthly recap (06-3) + screening section (08 fold-in) + digest loss-framing (06-2b)
-    - deferred: won_amount attribution (06-4), analytics.html UI flip + milestones timeline (06-1/2c, 07-3e)
-  - [ ] E3 — growth engine (07-4 streak unlock, 07-5 seasonal, 07-6 density referral)
-  - [ ] E4 — Google review tracking (07-1; gated on Places API)
+- [x] E — Make value VISIBLE (plans 06+08+07) — COMPLETE. Built via 5 parallel sonnet worktree
+      agents (branched stale from 92aacde) + serial harvest/integration onto staging; 74/74 green.
+  - [x] E1 — Customer Book page (07-2)
+  - [x] E2a — progressive ROI milestones (07-3)
+  - [x] E2b — monthly recap (06-3) + screening section (08 fold-in) + digest loss-framing (06-2b)
+  - [x] E4 — Google review tracking (07-1; inert without Places key)
+  - [x] E5 — won_amount attribution (06-4) + analytics dollar-flip + loss-note (06-1/2c)
+  - [x] E3c — auto-mode streak unlock (07-4); E3ab — seasonal (07-5) + density referral (07-6)
+  - integration fix: scan-driven digests bypass owner quiet-hours (Batch D latent bug exposed at night)
+  - minor deferrals: 07-3e analytics milestones-timeline/all-time-default + /api/roi_milestones;
+    07-2e customer-book briefing-card hook
   - deferred: 07-2e briefing-card hook (additive enrichment)
 - [ ] F — SEO/rename/ROI anchor, non-decision parts (plan 09)
 - [ ] G — voicemail→lead + web-chat widget, code-only (plan 10)

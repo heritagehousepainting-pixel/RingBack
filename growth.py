@@ -186,6 +186,18 @@ def _copy_referral(first, business):
             f"them call us. {_bizname(business)}.")
 
 
+def _copy_referral_dense(first, business):
+    """Density-aware referral copy: fires when zip_counts >= 2 for the lead's zip."""
+    return (f"{_greet(first)}we've been busy on your block this month. "
+            f"If a neighbor needs the same work, have them call {_bizname(business)}.")
+
+
+def _copy_seasonal(first, business, service):
+    """Seasonal campaign copy for past customers."""
+    return (f"{_greet(first)}It's that time of year — {_bizname(business)} has openings "
+            f"for {service} before the rush. Reply and we'll get you in.")
+
+
 def _copy_membership(first, business):
     return (f"{_greet(first)}since you've had us out a few times, we run a maintenance plan so "
             "the small stuff gets handled before it gets bigger. Want the details?")
@@ -194,8 +206,8 @@ def _copy_membership(first, business):
 # ---- one opportunity dict ----
 def _opp(kind, lead_id, first, phone, tier, *, title, why, tone, label, money,
          draft="", sendable=True, compliance="", action=None,
-         tone_risk=False, blocked_reason=None):
-    return {
+         tone_risk=False, blocked_reason=None, seasonal_service=None):
+    d = {
         "kind": kind, "play_id": f"{kind}:{lead_id}" if lead_id else kind,
         "title": title, "why": why, "tone": tone, "label": label,
         "money": int(money or 0), "money_label": _money_label(int(money or 0)),
@@ -210,6 +222,9 @@ def _opp(kind, lead_id, first, phone, tier, *, title, why, tone, label, money,
         "tone_risk": tone_risk,
         "blocked_reason": blocked_reason,
     }
+    if seasonal_service is not None:
+        d["seasonal_service"] = seasonal_service
+    return d
 
 
 # ---- the engine ----
@@ -303,10 +318,15 @@ def plays(business):
                 out.append(play_wb)
 
         # GROW -- referral at the goodwill peak (job wrapped in the last few days).
+        # Change 6: density-aware copy when >= 2 jobs in the same zip within 14 days.
         if job_done and (today - last_appt).days <= 3 and "referral" not in kinds:
+            _z = _zip(c.get("address"))
+            _nearby = zip_counts.get(_z, 0) if _z else 0
+            _ref_draft = (_copy_referral_dense(first, business) if _nearby >= 2
+                          else _copy_referral(first, business))
             out.append(_opp("referral", lid, who, phone, "grow",
                             title=f"Ask {who} for a referral", why="just wrapped, peak goodwill",
-                            tone="ok", label="Referral", money=val, draft=_copy_referral(first, business)))
+                            tone="ok", label="Referral", money=val, draft=_ref_draft))
 
         # GROW -- membership for repeat, lower-ticket customers (recurring-revenue floor).
         if booked >= 2 and 0 < val < 500 and "membership" not in kinds:
@@ -342,11 +362,45 @@ def _seasonal_play(business, today, val):
     for key, (start_m, end_m), service in _SEASONS:
         if key in trade and start_m <= today.month <= end_m:
             return _opp("seasonal", None, "", "", "grow",
-                        title=f"Offer {service} to past customers now",
-                        why="peak season is opening; past customers book faster than new leads",
-                        tone="ok", label="Seasonal", money=val * 5, sendable=False,
-                        action="show my leads")
+                        title=f"Seasonal: send {service} offer to past customers",
+                        why="peak season opening; past customers book faster than new leads",
+                        tone="ok", label="Seasonal", money=val * 5,
+                        sendable=True,  # Change 5: now sendable via cohort-blast route
+                        action="launch_seasonal_campaign",
+                        seasonal_service=service)
     return None
+
+
+def seasonal_cohort(business_id, today=None):
+    """Past customers eligible for a seasonal blast: booked leads whose last appointment
+    was > 90 days ago. Returns [{id, name, phone, first}, ...].
+    Change 5: cohort function for the seasonal campaign launch route."""
+    if today is None:
+        today = date.today()
+    candidates = db.growth_candidates(business_id)
+    result = []
+    for c in candidates:
+        booked = c.get("booked_count") or 0
+        if booked < 1:
+            continue
+        last_appt_day = c.get("last_appt_day")
+        if not last_appt_day:
+            continue
+        last_appt = _parse_date(last_appt_day)
+        if not last_appt:
+            continue
+        if (today - last_appt).days <= 90:
+            continue
+        phone = (c.get("phone") or "").strip()
+        if not phone:
+            continue
+        result.append({
+            "id": c["id"],
+            "name": c.get("name", ""),
+            "phone": phone,
+            "first": _first(c.get("name")),
+        })
+    return result
 
 
 def _financing_threshold(business):

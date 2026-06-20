@@ -10,7 +10,7 @@ import secrets
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone, date
 from functools import wraps
 from urllib.parse import quote
 
@@ -1362,6 +1362,8 @@ def _handle_tray_reply(biz, cmd):
     if cmd["cmd"] == "go":
         result = db.release_growth_batch(biz["id"], approved_via="sms_go")
         n = result["released"]
+        if n > 0:
+            db.record_growth_go(biz["id"])  # 07-4: count the GO toward the auto-unlock streak
         msg = f"{n} text{'s' if n != 1 else ''} queued. They will go out shortly."
         if owner_cell:
             messaging.send_sms(biz, owner_cell, msg, gate=False)
@@ -1396,8 +1398,12 @@ def settings_growth_mode():
     until L2 streak unlock ships in a later phase. Only 'off' and 'tray' accepted."""
     biz = current_business()
     mode = (request.form.get("mode") or "off").strip()
-    if mode not in ("off", "tray"):
-        # 'auto' and any unknown value coerced to 'off'. Non-negotiable TCPA gate.
+    if mode == "auto":
+        # 07-4 streak gate: only allow auto once the owner has earned the 7-day GO streak.
+        if not biz.get("growth_streak_unlocked_at"):
+            mode = "tray"  # coerce silently; streak not yet earned
+    elif mode not in ("off", "tray"):
+        # Unknown mode -> off. Non-negotiable TCPA gate.
         mode = "off"
     db.set_growth_mode(biz["id"], mode)
     return redirect("/settings?growth_saved=1")
@@ -1425,10 +1431,23 @@ def growth_tray():
             job_val = 2000
         is_estimated = True
     total = job_val * len(held)
+    streak_count = biz.get("growth_streak_count") or 0   # 07-4: auto-unlock progress
+    # 07-5: surface the seasonal play + cohort count for the seasonal campaign card.
+    try:
+        _seasonal_play = next((p for p in growth.plays(biz) if p.get("kind") == "seasonal"), None)
+        _seasonal_cohort_count = len(growth.seasonal_cohort(biz["id"], date.today())) if _seasonal_play else 0
+    except Exception:
+        _seasonal_play = None
+        _seasonal_cohort_count = 0
     return render_template("growth_tray.html", business=biz, held=held,
                            growth_mode=db.growth_mode(biz["id"]),
                            total=total, is_estimated=is_estimated,
-                           released=request.args.get("released"))
+                           released=request.args.get("released"),
+                           streak_count=streak_count,
+                           seasonal_blocked=request.args.get("seasonal_blocked"),
+                           seasonal_queued=request.args.get("seasonal_queued"),
+                           seasonal_play=_seasonal_play,
+                           seasonal_cohort_count=_seasonal_cohort_count)
 
 
 @app.route("/growth/tray/release", methods=["POST"])
@@ -1442,6 +1461,8 @@ def growth_tray_release():
         abort(403)
     biz = current_business()
     result = db.release_growth_batch(biz["id"], approved_via="ui_tap")
+    if result["released"] > 0:
+        db.record_growth_go(biz["id"])  # 07-4: count the GO toward the auto-unlock streak
     return redirect(f"/growth/tray?released={result['released']}")
 
 
@@ -1454,6 +1475,38 @@ def growth_tray_skip(sched_id):
     biz = current_business()
     db.cancel_growth_play(sched_id, biz["id"])
     return redirect("/growth/tray")
+
+
+@app.route("/growth/seasonal/launch", methods=["POST"])
+@login_required
+def launch_seasonal_campaign():
+    """07-5 tray-gated cohort blast: queue one seasonal SMS per eligible past customer, each
+    as 'held' through the scheduled_messages spine (CSRF-gated). Frequency cap: one blast per
+    business per 28-day window; skips opt-outs and recently-touched leads."""
+    if not _csrf_ok():
+        abort(403)
+    biz = current_business()
+    if db.recent_growth_touch_kind(biz["id"], "seasonal", within_days=28):
+        return redirect("/growth/tray?seasonal_blocked=already_sent")
+    from growth import seasonal_cohort, _copy_seasonal
+    today = date.today()
+    service = request.form.get("service", "seasonal work")
+    cohort = seasonal_cohort(biz["id"], today)
+    queued = 0
+    for lead in cohort:
+        phone = (lead.get("phone") or "").strip()
+        if not phone or messaging.outbound_mode(biz, phone) == "suppressed":
+            continue
+        if db.recent_growth_touch(biz["id"], lead["id"], within_days=30):
+            continue
+        body = _copy_seasonal(lead.get("first", ""), biz, service)
+        if "[" in body:
+            continue
+        send_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        db.add_scheduled_message(biz["id"], lead["id"], None, "seasonal",
+                                 send_at, body, status="held")
+        queued += 1
+    return redirect(f"/growth/tray?seasonal_queued={queued}")
 
 
 # ---- Go-Live wizard: a contractor connects their phone without a shell or the

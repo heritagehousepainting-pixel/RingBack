@@ -24,7 +24,52 @@
 </div>
 {% endif %}
 
+{% if seasonal_queued %}
+<div class="provider-note provider-note-ok" style="margin-bottom:var(--space-4)">
+  Seasonal campaign queued: {{ seasonal_queued }} message{{ 's' if seasonal_queued|int != 1 else '' }} scheduled.
+</div>
+{% endif %}
+{% if seasonal_blocked %}
+<div class="provider-note" style="margin-bottom:var(--space-4);background:var(--surface);border:1px solid var(--border);color:var(--ink-soft);padding:var(--space-3) var(--space-4);border-radius:var(--radius)">
+  Seasonal campaign already sent this month. Next window opens in 28 days.
+</div>
+{% endif %}
+{% if seasonal_play %}
+<div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:var(--space-4);margin-bottom:var(--space-5)">
+  <h3 style="margin:0 0 var(--space-2);font-size:1rem;font-weight:700">{{ seasonal_play.title }}</h3>
+  <p style="margin:0 0 var(--space-3);color:var(--ink-soft);font-size:0.9rem">
+    {{ seasonal_cohort_count }} past customer{{ 's' if seasonal_cohort_count != 1 else '' }} eligible -- they know you, they book faster.
+  </p>
+  <form method="post" action="/growth/seasonal/launch">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="service" value="{{ seasonal_play.seasonal_service or '' }}">
+    {{ button('Launch Campaign', variant='primary') }}
+  </form>
+</div>
+{% endif %}
+
 {% if held %}
+
+{% if growth_mode == 'tray' %}
+{% if business.get('growth_streak_unlocked_at') %}
+<div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4);display:flex;align-items:center;gap:var(--space-3)">
+  <span style="font-size:1.3rem">&#9733;</span>
+  <span style="color:var(--accent-strong);font-weight:600">Auto Mode unlocked. Enable it in Settings to skip the daily approval.</span>
+</div>
+{% else %}
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-2)">
+    <span style="font-size:0.85rem;color:var(--ink-soft);font-weight:500">{{ streak_count }}/7 mornings GO &rarr; unlocks Auto Mode</span>
+    <span style="font-size:0.85rem;color:var(--ink-soft)">{{ 7 - streak_count }} to go</span>
+  </div>
+  <div style="display:flex;gap:6px">
+    {% for i in range(7) %}
+    <span style="flex:1;height:8px;border-radius:4px;background:{% if i < streak_count %}var(--accent){% else %}var(--border){% endif %}"></span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endif %}
 
 <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-5)">
   <div>

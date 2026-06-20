@@ -108,6 +108,18 @@ check("_int_pref keeps a real 0 (not treated as missing)", alerts._int_pref({"ma
 import inspect as _inspect
 _src = _inspect.getsource(alerts.notify)
 check("owner SMS stays gate=False (TCPA backstop not co-opted)", "gate=False" in _src)
+# Scan-driven morning/afternoon digests are time-gated by their scanner, so they bypass
+# the owner quiet-hours hold (otherwise the wall clock double-gates them).
+check("scan-driven digests bypass quiet hours",
+      {"daily_digest", "monthly_recap", "growth_tray", "vic_morning"} <= alerts._QUIET_BYPASS_KINDS)
+db.update_alert_prefs(1, {"alert_quiet_start": 22, "alert_quiet_end": 7})  # quiet ACTIVE
+_qbiz = db.get_business(1)
+_FixedNow.hour = 23  # deep in the quiet window
+_dd = alerts.notify(_qbiz, "daily_digest",
+                    {"n_leads": 1, "money": "", "is_estimated": False, "plays_count": 0,
+                     "plays_summary": "", "top_stall_name": "", "top_stall_hours": 0,
+                     "local_day": "2026-06-25"})
+check("daily_digest sends even at 11pm wall-clock (scanner already gated it)", "sms" in chans(_dd))
 
 alerts.datetime = _real_dt   # restore the real clock for the remaining tests
 # disable quiet hours so later notify() calls aren't held by the real wall clock

@@ -141,15 +141,21 @@ check("test1: redirects to settings with growth_saved=1",
 check("test1: db stores tray", db.growth_mode(_biz1_id()) == "tray")
 
 # ====================================================================
-# Test 2: POST /settings/growth_mode with mode='auto' -> server rejects (TCPA lock)
+# Test 2: POST /settings/growth_mode with mode='auto' without streak -> coerced to 'tray'
+# (Plan 07 Change 4: 'auto' without the 7-day streak is silently coerced to 'tray',
+# not 'off'. The TCPA gate is still enforced -- auto mode cannot be set without earning it.)
 # ====================================================================
-print("\n=== Test 2: growth_mode POST auto (TCPA lock) ===")
+print("\n=== Test 2: growth_mode POST auto without streak (TCPA gate) ===")
 
 db.set_growth_mode(_biz1_id(), "off")
+# Ensure streak is NOT unlocked (no growth_streak_unlocked_at)
+_c = db.get_conn()
+_c.execute("UPDATE businesses SET growth_streak_unlocked_at=NULL WHERE id=?", (_biz1_id(),))
+_c.commit(); _c.close()
 r = client.post("/settings/growth_mode", data={"mode": "auto"},
                 follow_redirects=False)
 check("test2: auto request still redirects", r.status_code in (301, 302))
-check("test2: db stores 'off' not 'auto'", db.growth_mode(_biz1_id()) == "off")
+check("test2: db stores 'tray' not 'auto' (streak gate)", db.growth_mode(_biz1_id()) == "tray")
 
 # ====================================================================
 # Test 3: GET /growth/tray with held plays -> 200 + "Send All" + play count
