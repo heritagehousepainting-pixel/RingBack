@@ -205,7 +205,9 @@ c.execute("UPDATE businesses SET growth_streak_unlocked_at=NULL, growth_streak_c
           " growth_mode='tray' WHERE id=1")
 c.commit()
 c.close()
-resp8 = _client8.post("/settings/growth_mode", data={"mode": "auto"},
+with _client8.session_transaction() as _s:
+    _s["csrf_token"] = "test_csrf"
+resp8 = _client8.post("/settings/growth_mode", data={"mode": "auto", "_csrf": "test_csrf"},
                       follow_redirects=False)
 final_mode8 = db.growth_mode(1)
 check("POST auto without streak: mode NOT 'auto'", final_mode8 != "auto")
@@ -222,7 +224,9 @@ c.execute("UPDATE businesses SET growth_streak_unlocked_at=?, growth_streak_coun
           " growth_mode='tray' WHERE id=1", (unlock_time,))
 c.commit()
 c.close()
-resp9 = _client9.post("/settings/growth_mode", data={"mode": "auto"},
+with _client9.session_transaction() as _s:
+    _s["csrf_token"] = "test_csrf"
+resp9 = _client9.post("/settings/growth_mode", data={"mode": "auto", "_csrf": "test_csrf"},
                       follow_redirects=False)
 final_mode9 = db.growth_mode(1)
 check("POST auto WITH streak: mode set to 'auto'", final_mode9 == "auto")
@@ -232,7 +236,9 @@ print("\n=== 10. settings_growth_mode: unknown mode coerced to 'off' ===")
 _client10 = app.app.test_client()
 _client10.post("/login", data={"email": config.SEED_OWNER_EMAIL,
                                "password": config.SEED_OWNER_PASSWORD})
-resp10 = _client10.post("/settings/growth_mode", data={"mode": "hacker_mode"},
+with _client10.session_transaction() as _s:
+    _s["csrf_token"] = "test_csrf"
+resp10 = _client10.post("/settings/growth_mode", data={"mode": "hacker_mode", "_csrf": "test_csrf"},
                         follow_redirects=False)
 check("Unknown mode coerced to 'off'", db.growth_mode(1) == "off")
 

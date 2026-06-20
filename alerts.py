@@ -41,7 +41,9 @@ _DAILY_DEDUPE_KINDS = ("vic_morning", "vic_stall", "growth_tray", "daily_digest"
 # Graduation fires once per business lifetime (the mode flips once), so dedupe
 # over a very long window to prevent any edge-case re-fire.
 _LONG_DEDUPE_SECONDS = 365 * 24 * 3600
-_LONG_DEDUPE_KINDS = ("screening_graduated",)
+# reputation_milestone has no per-event key (one "your reviews grew" moment), so a long
+# window stops the 28-day poll from re-firing it on every pass once the +5 threshold is crossed.
+_LONG_DEDUPE_KINDS = ("screening_graduated", "reputation_milestone")
 # Plan 05-1: kinds that bypass owner quiet hours (fire-alarm level -- never held overnight).
 _URGENT_BYPASS_KINDS = frozenset({"urgent", "sms_fail", "forwarding_lost", "tick_stale"})
 # Scan-driven proactive pushes are ALREADY time-controlled by their scanner (8-9am or the

@@ -25,7 +25,11 @@
   var cs = document.createElement("script");
   cs.src = origin + "/api/widget/" + encodeURIComponent(slug) + "/config.js";
   cs.onload = function () {
-    if (window.__fb && window.__fb.biz) { bizName = window.__fb.biz; relabel(); }
+    // Empty config => slug unknown or widget disabled: remove the bubble entirely so a
+    // visitor never sees a button that can't submit.
+    if (!window.__fb || !window.__fb.biz) { if (root && root.remove) root.remove(); return; }
+    bizName = window.__fb.biz;
+    relabel();
   };
   document.head.appendChild(cs);
 
@@ -55,8 +59,8 @@
       '<div class="fb-w-body">' +
         '<p class="fb-w-h">Text us</p>' +
         '<p class="fb-w-sub">Leave your number and we’ll text you right back.</p>' +
-        '<input class="fb-w-name" type="text" placeholder="Your name (optional)" autocomplete="name">' +
-        '<input class="fb-w-phone" type="tel" placeholder="Your phone number" autocomplete="tel" inputmode="tel">' +
+        '<input class="fb-w-name" type="text" placeholder="Your name (optional)" aria-label="Your name (optional)" autocomplete="name">' +
+        '<input class="fb-w-phone" type="tel" placeholder="Your phone number" aria-label="Your phone number" autocomplete="tel" inputmode="tel">' +
         '<button class="fb-w-send" type="button">Send</button>' +
         '<p class="fb-w-consent">By submitting, you agree to receive texts from <span class="fb-w-biz">us</span>. Reply STOP to opt out.</p>' +
       '</div>' +

@@ -1188,6 +1188,8 @@ def api_reputation():
     """E4: Google review snapshot for the current business (tenant-scoped, read-only).
     Current count/rating + the baseline snapshot + last-updated. Null until the first poll."""
     biz = current_business()
+    if not biz:
+        return jsonify(review_count=None), 200
     return jsonify(
         review_count=biz.get("google_review_count"),
         star_rating=biz.get("google_star_rating"),
@@ -1397,8 +1399,10 @@ def _handle_tray_reply(biz, cmd):
 @app.route("/settings/growth_mode", methods=["POST"])
 @login_required
 def settings_growth_mode():
-    """Set growth mode for the business. 'auto' is rejected server-side (TCPA lock)
-    until L2 streak unlock ships in a later phase. Only 'off' and 'tray' accepted."""
+    """Set growth mode for the business. 'auto' requires the earned 7-day streak; other
+    values coerce to off. Growth mode gates TCPA-sensitive sending, so CSRF-guard it."""
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     mode = (request.form.get("mode") or "off").strip()
     if mode == "auto":
@@ -2864,8 +2868,8 @@ def twilio_voice_recording():
     on the SAME row -- no fake direction), and greets ONLY an empty thread (no double-greeting
     when the missed-call text-back already fired). Inert until voicemail is enabled + wired."""
     biz = db.get_business_by_twilio_number(request.form.get("To", ""))
-    if not biz:
-        return _twiml("<Response/>")
+    if not biz or not biz.get("voicemail_enabled"):
+        return _twiml("<Response/>")   # inert unless the owner opted in
     caller = request.form.get("From", "")
     if not caller:
         return _twiml("<Response/>")

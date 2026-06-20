@@ -133,12 +133,15 @@ _CUSTOMER_LEAD_ID = _make_lead("Customer Alice", _CUSTOMER_PHONE)
 print("\n=== Test 1: growth_mode POST tray ===")
 
 db.set_growth_mode(_biz1_id(), "off")
-r = client.post("/settings/growth_mode", data={"mode": "tray"},
+r = client.post("/settings/growth_mode", data={"mode": "tray", "_csrf": "test_csrf"},
                 follow_redirects=False)
 loc = r.headers.get("Location", "")
 check("test1: redirects to settings with growth_saved=1",
       r.status_code in (301, 302) and "growth_saved=1" in loc)
 check("test1: db stores tray", db.growth_mode(_biz1_id()) == "tray")
+# Final-audit fix: growth mode gates TCPA-sensitive sending, so it must be CSRF-guarded.
+check("test1b: growth_mode POST without _csrf -> 403",
+      client.post("/settings/growth_mode", data={"mode": "auto"}, follow_redirects=False).status_code == 403)
 
 # ====================================================================
 # Test 2: POST /settings/growth_mode with mode='auto' without streak -> coerced to 'tray'
@@ -152,7 +155,7 @@ db.set_growth_mode(_biz1_id(), "off")
 _c = db.get_conn()
 _c.execute("UPDATE businesses SET growth_streak_unlocked_at=NULL WHERE id=?", (_biz1_id(),))
 _c.commit(); _c.close()
-r = client.post("/settings/growth_mode", data={"mode": "auto"},
+r = client.post("/settings/growth_mode", data={"mode": "auto", "_csrf": "test_csrf"},
                 follow_redirects=False)
 check("test2: auto request still redirects", r.status_code in (301, 302))
 check("test2: db stores 'tray' not 'auto' (streak gate)", db.growth_mode(_biz1_id()) == "tray")
