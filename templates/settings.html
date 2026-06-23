@@ -57,6 +57,8 @@
   {% call card(anchor='set-calendar', title='Connect your calendar', subtitle='Link Google Calendar so booked estimates show up there automatically and the AI never offers a time you’re already busy.') %}
     {% if gconnected %}<p class="provider-note provider-note-ok">Google Calendar is connected. New estimates sync to it, and your busy times are kept open-free.</p>{% endif %}
     {% if gerror %}<p class="provider-note provider-note-err">{{ 'Add your Google credentials to enable this.' if gerror == 'unconfigured' else 'We couldn’t finish connecting Google. Please try again.' }}</p>{% endif %}
+    {% if olconnected %}<p class="provider-note provider-note-ok">Outlook Calendar is connected. New estimates sync to it, and your busy times are kept open-free.</p>{% endif %}
+    {% if olerror %}<p class="provider-note provider-note-err">{{ 'Add your Microsoft credentials to enable this.' if olerror == 'unconfigured' else ('If you were disconnected, reconnect below to restore the Outlook sync.' if olerror == 'exchange' else 'We couldn’t finish connecting Outlook. Please try again.') }}</p>{% endif %}
     <div class="provider-grid">
       <div class="provider-card{{ ' is-connected' if google_connected else '' }}" data-provider="google">
         <span class="provider-logo provider-logo-google">{{ provider_logo('google') }}</span>
@@ -72,7 +74,35 @@
           <button type="button" class="btn btn-secondary btn-sm provider-btn" disabled title="Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable">Coming soon</button>
         {% endif %}
       </div>
-      {% for p in [{'key':'outlook','name':'Outlook'}, {'key':'apple','name':'Apple iCloud'}, {'key':'yahoo','name':'Yahoo'}] %}
+      {# Outlook Calendar — live card when configured, placeholder otherwise #}
+      {% if outlook_configured %}
+      <div class="provider-card{{ ' is-connected' if outlook_connected else '' }}" data-provider="outlook">
+        <span class="provider-logo provider-logo-outlook">{{ provider_logo('outlook') }}</span>
+        <span class="provider-meta">
+          <span class="provider-name">Outlook Calendar</span>
+          <span class="provider-status">
+            {%- if outlook_connected -%}Connected
+            {%- elif olerror == 'exchange' -%}Reconnect needed
+            {%- else -%}Outlook / Microsoft 365{%- endif -%}
+          </span>
+        </span>
+        {% if outlook_connected %}
+          <button type="button" class="btn btn-secondary btn-sm provider-btn" id="outlook-disconnect">Disconnect</button>
+        {% else %}
+          <a class="btn btn-primary btn-sm provider-btn" href="/api/calendar/outlook/connect">{{ 'Reconnect' if olerror == 'exchange' else 'Connect' }}</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="provider-card is-soon" data-provider="outlook">
+        <span class="provider-logo provider-logo-outlook">{{ provider_logo('outlook') }}</span>
+        <span class="provider-meta">
+          <span class="provider-name">Outlook Calendar</span>
+          <span class="provider-status">Contact us to enable, or sign in with Google</span>
+        </span>
+        <button type="button" class="btn btn-secondary btn-sm provider-btn" disabled title="Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET to enable">Coming soon</button>
+      </div>
+      {% endif %}
+      {% for p in [{'key':'apple','name':'Apple iCloud'}, {'key':'yahoo','name':'Yahoo'}] %}
       <div class="provider-card is-soon" data-provider="{{ p.key }}">
         <span class="provider-logo provider-logo-{{ p.key }}">{{ provider_logo(p.key) }}</span>
         <span class="provider-meta">
@@ -124,12 +154,13 @@
   {% endcall %}
   <script>
   (function(){
+    var csrf = function(){ return (document.querySelector('[name=_csrf]')||{}).value || ''; };
     var syncBtn = document.getElementById('jobber-sync-btn');
     if (syncBtn) {
       syncBtn.addEventListener('click', function(){
         syncBtn.disabled = true;
         syncBtn.textContent = 'Syncing…';
-        fetch('/api/fsm/sync', {method:'POST', headers:{'X-CSRF-Token': (document.querySelector('[name=_csrf]')||{}).value || ''}})
+        fetch('/api/fsm/sync', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
           .then(function(r){return r.json();})
           .then(function(d){ syncBtn.textContent = d.ok ? 'Synced' : (d.error || 'Error'); })
           .catch(function(){ syncBtn.textContent = 'Error'; });
@@ -139,7 +170,25 @@
     if (discBtn) {
       discBtn.addEventListener('click', function(){
         if (!confirm('Disconnect Jobber? Your imported contact suggestions will remain.')) return;
-        fetch('/api/fsm/jobber/disconnect', {method:'POST', headers:{'X-CSRF-Token': (document.querySelector('[name=_csrf]')||{}).value || ''}})
+        fetch('/api/fsm/jobber/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var gDisc = document.getElementById('google-disconnect');
+    if (gDisc) {
+      gDisc.addEventListener('click', function(){
+        if (!confirm('Disconnect Google Calendar?')) return;
+        fetch('/api/calendar/google/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var olDisc = document.getElementById('outlook-disconnect');
+    if (olDisc) {
+      olDisc.addEventListener('click', function(){
+        if (!confirm('Disconnect Outlook Calendar?')) return;
+        fetch('/api/calendar/outlook/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
           .then(function(r){return r.json();})
           .then(function(){ location.reload(); });
       });

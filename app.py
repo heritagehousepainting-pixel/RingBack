@@ -26,6 +26,7 @@ import ai
 import assistant
 import convos
 import google_cal
+import outlook_cal
 import messaging
 import mail
 import alerts
@@ -1319,6 +1320,10 @@ def settings():
                            google_connected=google_cal.is_connected(biz["id"]),
                            gconnected=request.args.get("gconnected"),
                            gerror=request.args.get("gerror"),
+                           outlook_configured=outlook_cal.configured(),
+                           outlook_connected=outlook_cal.is_connected(biz["id"]),
+                           olconnected=request.args.get("olconnected"),
+                           olerror=request.args.get("olerror"),
                            pw=request.args.get("pw"),
                            pwerror=request.args.get("pwerror"),
                            sms_configured=messaging.configured(),
@@ -1579,6 +1584,7 @@ def setup():
         calendar_connected=google_cal.is_connected(biz["id"]),
         contacts_connected=google_contacts.is_connected(biz["id"]),
         jobber_connected=(fsm_sync.push_configured() and jobber_fsm.is_connected(biz["id"])),
+        outlook_connected=(outlook_cal.configured() and outlook_cal.is_connected(biz["id"])),
         password_changed=not (user and check_password_hash(user["password_hash"], SEED_OWNER_PASSWORD)),
         ai_default=config.DEFAULT_BUSINESS.get("ai_instructions", ""))
     return render_template(
@@ -1951,6 +1957,13 @@ def open_conversation(biz, lead):
                     f"Estimate: {lead['name']}",
                     f"FirstBack booked a free estimate for {lead['name']} ({lead.get('phone')}).",
                     gday, gtime, tz=_tz)
+                # Plan 14: mirror onto Outlook Calendar (additive, guarded, daemon thread).
+                if outlook_cal.is_connected(biz["id"]):
+                    outlook_cal.create_event_async(
+                        biz["id"], appt_id,
+                        f"Estimate: {lead['name']}",
+                        f"FirstBack booked a free estimate for {lead['name']} ({lead.get('phone')}).",
+                        gday, gtime, tz=_tz)
                 reminders.enqueue_reminder(biz, lead, gday, gtime)
                 reminders.enqueue_morning_reminder(biz, lead, gday, gtime)
                 # Plan 13: push to Jobber as a quote request (additive, guarded daemon thread).
@@ -2027,7 +2040,8 @@ def handle_inbound(biz, lead, body):
                                               "phone": lead.get("phone")})
 
     history = db.get_messages(lead_id)
-    exclude = google_cal.busy_slot_ids(biz["id"])  # Google conflicts, empty if not connected
+    # Merge Google + Outlook busy slots; both return empty set when not connected.
+    exclude = google_cal.busy_slot_ids(biz["id"]) | outlook_cal.busy_slot_ids(biz["id"])
     reply, booking = ai.generate_reply(biz, history, exclude_slot_ids=exclude,
                                        lead_id=lead_id)
     db.add_message(lead_id, "out", reply)
@@ -2088,6 +2102,13 @@ def handle_inbound(biz, lead, body):
                     f"Estimate: {lead['name']}",
                     f"FirstBack booked a free estimate for {lead['name']} ({lead['phone']}).",
                     gday, gtime, tz=_tz)
+                # Plan 14: mirror onto Outlook Calendar (additive, guarded, daemon thread).
+                if outlook_cal.is_connected(biz["id"]):
+                    outlook_cal.create_event_async(
+                        biz["id"], appt_id,
+                        f"Estimate: {lead['name']}",
+                        f"FirstBack booked a free estimate for {lead['name']} ({lead['phone']}).",
+                        gday, gtime, tz=_tz)
                 reminders.enqueue_reminder(biz, lead, gday, gtime)
                 reminders.enqueue_morning_reminder(biz, lead, gday, gtime)
                 # Plan 13: push to Jobber as a quote request (additive, guarded daemon thread).
@@ -2259,6 +2280,42 @@ def google_disconnect():
     return jsonify(connected=False)
 
 
+# ---- Real Outlook Calendar OAuth (gated on MICROSOFT_CLIENT_ID/SECRET) ----
+@app.route("/api/calendar/outlook/connect")
+@login_required
+def outlook_connect():
+    if not outlook_cal.configured():
+        return redirect("/settings?olerror=unconfigured")
+    state = secrets.token_urlsafe(16)
+    session["ol_state"] = state  # CSRF guard, verified on callback
+    return redirect(outlook_cal.auth_url(state))
+
+
+@app.route("/api/calendar/outlook/callback")
+@login_required
+def outlook_callback():
+    expected = session.pop("ol_state", None)
+    if request.args.get("error") or not request.args.get("code"):
+        return redirect("/settings?olerror=denied")
+    if not expected or request.args.get("state") != expected:
+        return redirect("/settings?olerror=state")
+    try:
+        outlook_cal.connect_with_code(current_business()["id"], request.args["code"])
+    except Exception as e:
+        print(f"[firstback] outlook connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?olerror=exchange")
+    return redirect("/settings?olconnected=1")
+
+
+@app.route("/api/calendar/outlook/disconnect", methods=["POST"])
+@login_required
+def outlook_disconnect():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    outlook_cal.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
 @app.route("/api/appointments/<int:appt_id>/cancel", methods=["POST"])
 @login_required
 def api_cancel_appointment(appt_id):
@@ -2278,6 +2335,10 @@ def api_cancel_appointment(appt_id):
     google_event_id = appt.get("google_event_id")
     if google_event_id and google_cal.is_connected(biz["id"]):
         google_cal.cancel_event_async(biz["id"], google_event_id)
+    # Plan 14: cancel the Outlook Calendar event if one was created.
+    outlook_event_id = appt.get("outlook_event_id")
+    if outlook_event_id and outlook_cal.is_connected(biz["id"]):
+        outlook_cal.cancel_event_async(biz["id"], outlook_event_id)
     when = fmt_slot_when(appt.get("day"), appt.get("slot_time")) or appt.get("scheduled_for") or "your estimate"
     lead = db.get_lead(appt["lead_id"], biz["id"])
     if lead and (lead.get("phone") or "").strip():

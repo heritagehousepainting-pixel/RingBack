@@ -193,6 +193,20 @@ GOOGLE_CONTACTS_REDIRECT_URI = os.environ.get(
     "GOOGLE_CONTACTS_REDIRECT_URI",
     "http://127.0.0.1:8800/api/contacts/google/callback")
 
+# --- Microsoft Outlook / Microsoft 365 Calendar (optional; gated) ---------
+# To turn on: in Azure Portal create an App Registration (any org directory +
+# personal MS accounts), add the redirect URI, grant delegated permissions
+# Calendars.ReadWrite + offline_access, create a client secret, then set
+# MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET. Until both are set every
+# outlook_cal entry point is a safe no-op (configured() returns False).
+# MICROSOFT_TENANT_ID defaults to "common" (works for both Outlook.com personal
+# accounts and Microsoft 365 / work accounts -- right for solo contractors).
+MICROSOFT_CLIENT_ID = os.environ.get("MICROSOFT_CLIENT_ID", "")
+MICROSOFT_CLIENT_SECRET = os.environ.get("MICROSOFT_CLIENT_SECRET", "")
+MICROSOFT_REDIRECT_URI = os.environ.get(
+    "MICROSOFT_REDIRECT_URI", "http://127.0.0.1:8800/api/calendar/outlook/callback")
+MICROSOFT_TENANT_ID = os.environ.get("MICROSOFT_TENANT_ID", "common")
+
 # --- Twilio (optional real SMS / voice) -----------------------------------
 # Powers real outbound texts (reminders, owner alerts) and, later, inbound SMS
 # and missed-call handling. Until the account SID and auth token are set,

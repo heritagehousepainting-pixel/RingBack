@@ -917,6 +917,11 @@ def init_db():
         if _col not in appt_cols:
             c.execute(f"ALTER TABLE appointments ADD COLUMN {_col} {_ddl}")
 
+    # Plan 14 — Outlook Calendar (P6). Additive column, idempotent pragma-check.
+    appt_cols = [r[1] for r in c.execute("PRAGMA table_info(appointments)").fetchall()]
+    if "outlook_event_id" not in appt_cols:
+        c.execute("ALTER TABLE appointments ADD COLUMN outlook_event_id TEXT")
+
     # Seed "client zero" (business 1) if no business exists yet.
     if not c.execute("SELECT 1 FROM businesses WHERE id=1").fetchone():
         b = DEFAULT_BUSINESS
@@ -1245,6 +1250,18 @@ def set_fsm_external_id(appointment_id, business_id, external_id, pushed_at):
     conn.execute(
         "UPDATE appointments SET fsm_external_id=?, fsm_pushed_at=? WHERE id=? AND business_id=?",
         (external_id, pushed_at, appointment_id, business_id))
+    conn.commit()
+    conn.close()
+
+
+def set_outlook_event_id(appointment_id, business_id, event_id):
+    """Store (or clear) the Outlook Calendar event id on an appointment.
+    Scoped by business_id to prevent cross-tenant writes (unlike set_google_event_id
+    which relies on caller validation -- this is explicit per the P6 audit)."""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE appointments SET outlook_event_id=? WHERE id=? AND business_id=?",
+        (event_id, appointment_id, business_id))
     conn.commit()
     conn.close()
 

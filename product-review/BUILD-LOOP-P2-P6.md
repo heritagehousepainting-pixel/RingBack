@@ -32,11 +32,19 @@ Goal: build the two genuinely-new roadmap items from `DEV-HANDOFF-2026-06-23.md`
       `product-review/plan-audits/13-build-audit.md`. Orchestrator fixed all 4 nits (N1 dead code,
       N2 stale counter, N3 dead CSRF ref, DC2 "imported"→"synced" honesty) + re-verified green.
       **P2 committed + pushed to staging.**
-- [ ] **S5 BUILD P6** (sonnet, write-capable) → gated Outlook/Graph calendar provider + mocked tests,
-      applying audit fixes F6 (Windows-tz shim), F7 (recommended_setup 3-touch), F8 (refresh→reconnect),
-      F10 (module-top import). Runs AFTER P2 commit (shared files). ← **NEXT**
-- [ ] **S6 BUILD-AUDIT P6** (sonnet) → review + full test sweep green. Then orchestrator commits/pushes staging.
-- [ ] **S7 HANDOFF** → update this tracker + SETUP_NEEDED (owner creds to flip live) + memory. Loop stops; notify owner.
+- [x] **S5 BUILD P6** (sonnet) → DONE. New: `outlook_cal.py`, `test_outlook_cal.py` (85 checks).
+      Modified: config/db/connections/app/settings.html/test_setup. Fixes F6/F7/F8/F10 + business-scoped
+      `set_outlook_event_id` applied. **Orchestrator caught a CRITICAL bug the build agent missed:** its
+      editor mangled the calendar-card Jinja string delimiters into smart quotes → `TemplateSyntaxError`
+      (the whole `/settings` page broke; also what was misreported as a "pre-existing" test_scheduling
+      failure). Fixed 9 lines back to straight-quote delimiters; verified `/settings` renders 200 with
+      both cards. test_outlook_cal 85/0; test_scheduling now 18/0; fsm_sync 78/0; setup 147/0;
+      sf8_connections 99/0; screening 57/0.
+- [x] **S6 BUILD-AUDIT P6** (sonnet) → DONE. **SHIP-WITH-NITS**, no P1. Audit at
+      `product-review/plan-audits/14-build-audit.md`. Confirmed all 5 fixes + clean smart-quote rescan.
+      Orchestrator fixed P2-2 (naive-datetime→UTC) + P2-3 (added /settings render guard; outlook 85→88).
+      **P6 committed + pushed to staging.**
+- [ ] **S7 HANDOFF** → update tracker + SETUP_NEEDED (owner creds to flip live) + memory. Loop stops; notify owner. ← **IN PROGRESS**
 
 ## Open decision to surface to owner (do not block the loop on it)
 - **Jobber vs Housecall Pro first** (doc open-question #2). Plan agent recommends; owner confirms
