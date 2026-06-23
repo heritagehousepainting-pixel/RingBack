@@ -24,12 +24,15 @@ small code gaps/bugs — NOT a rebuild. This loop = ASSESS → plan the real gap
 - Mocked tests only; never require live Twilio/telephony creds.
 
 ## Stages / state
-- [ ] **S1 ASSESS+PLAN** (sonnet, read-only) → audit `voice_service.py` + voice tests + app.py voice seams +
-      metering/cost + consent/quiet-hours guards. Determine true readiness. Output a GO-LIVE plan that
-      separates: (a) OWNER OPS (deploy firstback-voice + env), (b) genuine CODE gaps/bugs to build,
-      (c) copy flips (homepage/Pro/settings) — gated on deploy. ← **IN PROGRESS**
-- [ ] **S2 AUDIT** (sonnet) → scrutinize the plan + verify claimed gaps against real code.
-- [ ] **S3 BUILD** (sonnet, write-capable) → close ONLY the genuine code gaps (if any); mocked tests green.
+- [x] **S1 ASSESS+PLAN** (sonnet) → DONE. Verdict **DONE-PENDING-DEPLOY**; 153 voice tests pass.
+      Plan at `product-review/plans/15-voice-golive.md`. Genuine gaps: Bug 1 (dispatcher URL), httpx pin,
+      toggle honesty; + copy flips to make conditional; rest is owner-ops deploy.
+- [x] **S2 AUDIT** → compressed into orchestrator verification (plan was already evidence-based with
+      file:line + ran the tests). Confirmed Bug 1: `/twiml/dispatcher/<id>` IS a Flask route (app.py:1784,
+      uses `_public_base()` at 1795) but app.py:2015 builds its URL from `VOICE_PUBLIC_URL` → 404 in
+      split-service prod. `_public_base()` is the correct fix primitive. `PUBLIC_BASE_URL` exists in config.
+- [ ] **S3 BUILD** (sonnet, write-capable) → Bug 1 fix (+test), httpx pin, voice_configured copy
+      conditionals, toggle honesty. Gated/inert until FIRSTBACK_VOICE_URL set. ← **IN PROGRESS**
 - [ ] **S4 BUILD-AUDIT** (sonnet) → review + tests green. Orchestrator commits/pushes staging.
 - [ ] **S5 HANDOFF** → SETUP_NEEDED voice go-live (deploy steps) + memory; loop stops; notify owner.
 
