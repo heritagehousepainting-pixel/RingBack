@@ -21,10 +21,11 @@ Goal: build the two genuinely-new roadmap items from `DEV-HANDOFF-2026-06-23.md`
       Recommends **Jobber** for v1 (owner to confirm Jobber vs HCP). NOTE: a read-only Plan agent
       can't write files — it returned text, orchestrator wrote the files. Build stages MUST use a
       write-capable agent (general-purpose/claude).
-- [ ] **S2 PLAN-AUDIT** (sonnet) → review both plans for scope creep, security (OAuth/token storage,
-      webhook signature, cross-tenant isolation), feasibility, honesty. **Verify every assumed
-      function/table name against the real code.** Produce go/fix list. ← **IN PROGRESS**
-- [ ] **S3 BUILD P2** (sonnet) → gated read-only FSM sync + migrations + mocked tests.
+- [x] **S2 PLAN-AUDIT** (sonnet) → DONE. Both plans **GO-WITH-FIXES**. Audit at
+      `product-review/plan-audits/13-14-audit.md`. Caught a CRITICAL bug (F1: `presort` drops all
+      Jobber customers → use `db.upsert_suggestion` directly). Key fixes folded into both plans.
+- [ ] **S3 BUILD P2** (sonnet, **write-capable agent**) → gated read-only Jobber sync + migrations +
+      mocked tests, applying audit fixes F1/F2/F3 (+F4/F5 if time). ← **IN PROGRESS**
 - [ ] **S4 BUILD-AUDIT P2** (sonnet) → review + full test sweep green. Then orchestrator commits/pushes staging.
 - [ ] **S5 BUILD P6** (sonnet) → gated Outlook/Graph calendar provider + mocked tests.
 - [ ] **S6 BUILD-AUDIT P6** (sonnet) → review + full test sweep green. Then orchestrator commits/pushes staging.
