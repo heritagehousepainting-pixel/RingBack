@@ -25,10 +25,12 @@ texts CALL → AI phones back). Reuse the existing ConversationRelay infra (`voi
 - ASCII-only Jinja delimiters (smart quotes broke /settings twice — scan after any template edit).
 
 ## Stages / state
-- [ ] **S1 ASSESS+PLAN** (sonnet) → map the current inbound webhook flow + ConversationRelay; design live
-      answering that slots in safely; the opt-in/gating; AI disclosure + compliance; file touch list; test
-      plan. Flag the OWNER decision: live-answer-always vs answer-only-after-owner-no-answer. ← **IN PROGRESS**
-- [ ] **S2 AUDIT** (sonnet) → verify against real code + compliance; go/fix list.
+- [x] **S1 ASSESS+PLAN** (sonnet) → DONE. `product-review/plans/17-inbound-voice.md`. Model: FALLBACK
+      (forward-first, AI on no-answer; always-AI = blank forward_to, no code). Reuses voice service unchanged;
+      net-new is surgical (1 col + 1 helper + 2 hooks + greeting param + toggle). Compliance: quiet-hours N/A,
+      AI disclosure in greeting, attorney review = go-live gate not build gate.
+- [ ] **S2 AUDIT** (sonnet) → verify hook points + sentinel-first ordering + metering SID reuse vs real code;
+      confirm no break to forwarding/sentinel/callback; compliance check; go/fix list. ← **IN PROGRESS**
 - [ ] **S3 BUILD** (sonnet, write-capable) → implement; mocked tests green; don't break existing flows.
 - [ ] **S4 BUILD-AUDIT** (sonnet/inline) → review (compliance/honesty/regression/smart-quote) + tests green. Commit/push staging.
 - [ ] **S5 HANDOFF** → SETUP_NEEDED inbound-voice go-live + memory; loop stops; notify owner. END of the 2-loop run.
