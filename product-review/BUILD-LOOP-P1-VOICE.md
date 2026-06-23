@@ -31,10 +31,17 @@ small code gaps/bugs — NOT a rebuild. This loop = ASSESS → plan the real gap
       file:line + ran the tests). Confirmed Bug 1: `/twiml/dispatcher/<id>` IS a Flask route (app.py:1784,
       uses `_public_base()` at 1795) but app.py:2015 builds its URL from `VOICE_PUBLIC_URL` → 404 in
       split-service prod. `_public_base()` is the correct fix primitive. `PUBLIC_BASE_URL` exists in config.
-- [ ] **S3 BUILD** (sonnet, write-capable) → Bug 1 fix (+test), httpx pin, voice_configured copy
-      conditionals, toggle honesty. Gated/inert until FIRSTBACK_VOICE_URL set. ← **IN PROGRESS**
-- [ ] **S4 BUILD-AUDIT** (sonnet) → review + tests green. Orchestrator commits/pushes staging.
-- [ ] **S5 HANDOFF** → SETUP_NEEDED voice go-live (deploy steps) + memory; loop stops; notify owner.
+- [x] **S3 BUILD** (sonnet) → DONE. Bug 1 fixed (+test), httpx pinned, toggle honored (+R2e tests),
+      marketing copy auto-flips on `voice_configured`. 187 voice/dispatcher tests green.
+- [x] **S4 BUILD-AUDIT** → done inline (small pre-verified scope). **SHIP**, no P1. Audit at
+      `product-review/plan-audits/15-build-audit.md`. Verified both copy directions (no overclaim when off),
+      no template corruption, all suites green. **P1 batch committed + pushed to staging.**
+- [x] **S5 HANDOFF** → SETUP_NEEDED voice go-live section added; memory updated; loop stops; owner notified.
+
+## Outcome (2026-06-23)
+Voice is **DONE-PENDING-DEPLOY**. The 3 genuine code gaps are closed on `staging`; voice stays inert until
+the owner deploys the separate `firstback-voice` service + sets `FIRSTBACK_VOICE_URL` + flips the per-tenant
+toggle on. Owner gates the staging→main promotion (NOT promoted). Deploy steps in SETUP_NEEDED → "Voice (P1)".
 
 ## Likely owner decisions to surface (don't block the loop)
 - Confirm direction = caller-requested callback (already in code) vs add live inbound answering later.

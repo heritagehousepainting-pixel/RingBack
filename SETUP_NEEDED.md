@@ -436,6 +436,23 @@ plans 13/14). Inert no-ops until the env vars are set — nothing fires without 
   "common"). Then **Settings → Connect Outlook**. Note: personal MS accounts expire refresh tokens
   (24h inactivity / 90d) → the card shows "Reconnect Outlook" if that happens.
 
+### Voice (P1) — DONE-PENDING-DEPLOY (caller-requested AI voice callback)
+Built + tested (187 voice/dispatcher tests green); inert until the separate voice service is deployed.
+Caller texts **CALL** → the AI phones them back (Twilio ConversationRelay), books by voice, quiet-hours
++ consent gated. Code gaps closed 2026-06-23 (dispatcher TwiML URL bug; `httpx` pin; per-tenant toggle
+honored; marketing copy auto-flips on deploy). See `product-review/plans/15-voice-golive.md`. To go live:
+1. Complete the `firstback-voice` service block in `render.yaml` (uvicorn `voice_service:fastapi_app`,
+   ~$7/mo). Env: `FIRSTBACK_WEB_URL` (Flask app URL), `FIRSTBACK_INTERNAL_SECRET` (**same value on BOTH
+   services**), optional `FIRSTBACK_VOICE_TTS`, `FIRSTBACK_PROVIDER=claude`. (No Anthropic key needed on the
+   voice svc — it relays to the web app.)
+2. Deploy it; set `FIRSTBACK_VOICE_URL=<its url>` on the web service (master switch — flips `voice_configured`,
+   activates the CALL path + all guards, auto-flips the marketing copy to "live").
+3. Confirm `FIRSTBACK_PUBLIC_URL` set on web (AMD StatusCallback + the dispatcher TwiML base). ConversationRelay needs no Twilio add-on.
+4. **Flip voice ON for the live tenant:** the `voice_callback_enabled` column defaults to 0, so save Settings
+   with the "reply CALL" toggle ON (or `UPDATE businesses SET voice_callback_enabled=1 WHERE id=1`).
+5. Cost: ~$0.10–0.13/min (3-min call ≈ $0.30); default cap $20/biz/mo (`FIRSTBACK_VOICE_MONTHLY_CAP_CENTS`).
+   Per DEV-HANDOFF: price voice as a $29–$49/mo opt-in add-on once pricing/billing is live.
+
 ### Still NEEDS-OWNER (not built — external credentials)
 - **Deposit link at booking** (plan 10-3): owner creates a Stripe **Payment Link**, pastes the URL.
 - **GBP review dashboard** (plan 10-4): Google **business-scope re-auth** + enable the GBP API.

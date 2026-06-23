@@ -36,6 +36,8 @@ vclient = TestClient(voice_service.fastapi_app)
 
 BIZ_NUM, CALLER = "+15553140000", "+14155550199"
 db.set_business_twilio(1, BIZ_NUM, "PN1", forward_to="+15559990000")
+# Ensure the per-tenant voice toggle is ON so the CALL path fires in these tests.
+db.update_phone_voice(1, voice_callback_enabled=1)
 
 _pass = _fail = 0
 

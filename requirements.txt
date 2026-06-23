@@ -1,5 +1,6 @@
 Flask>=3.0,<4
 gunicorn>=22,<24        # production WSGI server (Render/host); the dev server is local-only
+httpx>=0.25,<1         # used by voice_service.py; pinned to avoid a transitive-only dep on anthropic
 requests>=2.32,<3      # MiniMax brain (HTTPS + certifi) + Twilio REST (SMS/voice)
 stripe>=10,<15         # Stripe billing (Checkout, portal, webhooks)
 # The Claude brain (FIRSTBACK_PROVIDER=claude + ANTHROPIC_API_KEY). Safe to ship even on

@@ -287,7 +287,8 @@ def _sanitize_history(raw):
 @app.route("/")
 def landing():
     # The front door — the onboarding hero.
-    return render_template("onboarding.html")
+    return render_template("onboarding.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/tour")
@@ -480,12 +481,14 @@ def auth_reset():
 # ---- Marketing pages (linked from the front door) ----
 @app.route("/product")
 def product():
-    return render_template("product.html")
+    return render_template("product.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/solutions")
 def solutions():
-    return render_template("solutions.html")
+    return render_template("solutions.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/resources")
@@ -500,7 +503,8 @@ def company():
 
 @app.route("/pricing")
 def pricing():
-    return render_template("pricing.html")
+    return render_template("pricing.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/contact", methods=["GET", "POST"])
@@ -2012,7 +2016,19 @@ def handle_inbound(biz, lead, body):
         _owner_cell = (biz.get("alert_sms") or biz.get("phone") or "").strip()
         _already_called = lead.get("dispatcher_call_last_at")
         if _owner_cell and not _already_called:
-            _disp_base = VOICE_PUBLIC_URL.rstrip("/") if VOICE_PUBLIC_URL else None
+            # Gate on VOICE_PUBLIC_URL (master switch), but build the TwiML URL from
+            # the FLASK base (PUBLIC_BASE_URL or _public_base()) because the
+            # /twiml/dispatcher/<id> route lives on the Flask app, NOT the separate
+            # voice service.  Using VOICE_PUBLIC_URL here causes a 404 in split-service
+            # prod where the two services run at different origins.
+            # Prefer the explicit config value so this also works in unit tests that
+            # call handle_inbound() outside a request context.
+            if VOICE_PUBLIC_URL:
+                _fb = (config.PUBLIC_BASE_URL.rstrip("/")
+                       if config.PUBLIC_BASE_URL else _public_base().rstrip("/"))
+                _disp_base = _fb
+            else:
+                _disp_base = None
             if _disp_base:
                 _disp_url = f"{_disp_base}/twiml/dispatcher/{lead_id}"
                 _call_result = messaging.place_call(biz, _owner_cell, _disp_url)
@@ -3247,7 +3263,11 @@ def twilio_sms_inbound():
     # when a voice service is deployed. The FCC treats AI voice as a robocall, so we
     # record the opt-in and only call AFTER the customer asks. If voice is off, fall
     # through and just answer by text.
-    if norm in _CALL_WORDS and VOICE_PUBLIC_URL:
+    # Also honor the per-tenant voice_callback_enabled toggle (saved in Settings).
+    # Default to ON (1) when the column is absent/None so an existing single tenant
+    # is never silently disabled by a missing explicit toggle value.
+    _voice_toggle_on = biz.get("voice_callback_enabled", 1) not in (0, False)
+    if norm in _CALL_WORDS and VOICE_PUBLIC_URL and _voice_toggle_on:
         db.set_voice_consent(biz["id"], caller, True)
         # R2 pre-call guard (ordered -- any fail -> text reply, never call).
         # (i) Re-read consent after writing: concurrent STOP could have cleared voice_ok.
