@@ -1,8 +1,8 @@
-"""FSM sync tests (Plan 13 — Jobber).
+"""FSM sync tests (Plan 13 — Jobber + Plan 16 — provider selection).
 
 Run: FIRSTBACK_DB_PATH=/tmp/test_fsm.db .venv/bin/python test_fsm_sync.py
 
-35 mocked cases covering:
+35+ mocked cases covering:
   - configured/connected gating
   - auth_url structure
   - connect_with_code success + failure
@@ -41,6 +41,10 @@ os.environ.setdefault("TWILIO_FROM_NUMBER", "+12677562454")
 os.environ.pop("JOBBER_CLIENT_ID", None)
 os.environ.pop("JOBBER_CLIENT_SECRET", None)
 os.environ.pop("JOBBER_REDIRECT_URI", None)
+# No live HCP creds by default (gated no-op)
+os.environ.pop("HCP_CLIENT_ID", None)
+os.environ.pop("HCP_CLIENT_SECRET", None)
+os.environ.pop("HCP_REDIRECT_URI", None)
 
 import config
 
@@ -56,6 +60,7 @@ db.init_db()
 
 import fsm_provider
 import jobber_fsm
+import hcp_fsm
 import fsm_sync
 import connections
 import triage
@@ -335,7 +340,7 @@ _FAKE_CLIENTS = [
     {"name": "Eve E",  "phones": ["+12155551002"], "email": "eve@example.com"},
 ]
 
-with patch.object(jobber_fsm, "fetch_clients", return_value=_FAKE_CLIENTS):
+with patch.object(jobber_fsm._provider, "fetch_clients", return_value=_FAKE_CLIENTS):
     result = fsm_sync.sync_clients(BIZ_ID)
 
 check("sync_clients: returns clients_fetched=2", result.get("clients_fetched") == 2)
@@ -360,7 +365,7 @@ def _capture_ingest(*a, **kw):
 contact_import.ingest = _capture_ingest
 
 _upsert_calls.clear()
-with patch.object(jobber_fsm, "fetch_clients", return_value=_FAKE_CLIENTS):
+with patch.object(jobber_fsm._provider, "fetch_clients", return_value=_FAKE_CLIENTS):
     fsm_sync.sync_clients(BIZ_ID)
 
 check("sync_clients F1: contact_import.ingest NOT called", len(_ingest_calls) == 0)
@@ -376,7 +381,7 @@ def _capture_upsert2(business_id, number, name, category, reason, source="behavi
     return _orig_upsert(business_id, number, name, category, reason, source)
 
 db.upsert_suggestion = _capture_upsert2
-with patch.object(jobber_fsm, "fetch_clients", return_value=_FAKE_CLIENTS):
+with patch.object(jobber_fsm._provider, "fetch_clients", return_value=_FAKE_CLIENTS):
     result2 = fsm_sync.sync_clients(BIZ_ID)
 # Already-pending suggestions: status='pending' so they are in the skip set
 # (decided = accepted|dismissed, classified = contacts — pending is NOT in skip).
@@ -729,6 +734,141 @@ class _TestProvider(fsm_provider.FSMProvider):
 _tp = _TestProvider()
 check("FSMProvider subclassable", _tp.configured() is True)
 check("FSMProvider PROVIDER_KEY = 'test'", _tp.PROVIDER_KEY == "test")
+
+
+# ===========================================================================
+# 18. Provider selection (Plan 16 — Option C) via fsm_sync._get_active_provider
+# ===========================================================================
+print("\n-- Plan 16: provider selection (Option C) --")
+
+# Set up HCP creds
+config.HCP_CLIENT_ID = "hcp_test_id"
+config.HCP_CLIENT_SECRET = "hcp_test_secret"
+hcp_fsm.HCP_CLIENT_ID = "hcp_test_id"
+hcp_fsm.HCP_CLIENT_SECRET = "hcp_test_secret"
+# Jobber creds already set earlier
+
+# Case A: only Jobber connected
+hcp_fsm.disconnect(BIZ_ID)
+jobber_fsm.disconnect(BIZ_ID)
+db.set_oauth_tokens(BIZ_ID, "jobber", "j_acc", "j_ref", future_expiry)
+p_only_job = fsm_sync._get_active_provider(BIZ_ID)
+check("Plan 16 provider-select: only Jobber -> returns Jobber provider",
+      p_only_job is jobber_fsm._provider)
+
+# Case B: only HCP connected
+jobber_fsm.disconnect(BIZ_ID)
+db.set_oauth_tokens(BIZ_ID, "housecall_pro", "h_acc", "h_ref", future_expiry)
+p_only_hcp = fsm_sync._get_active_provider(BIZ_ID)
+check("Plan 16 provider-select: only HCP -> returns HCP provider",
+      p_only_hcp is hcp_fsm._provider)
+
+# Case C: neither connected -> None
+jobber_fsm.disconnect(BIZ_ID)
+hcp_fsm.disconnect(BIZ_ID)
+p_neither = fsm_sync._get_active_provider(BIZ_ID)
+check("Plan 16 provider-select: neither connected -> None",
+      p_neither is None)
+
+# Case D: both connected -> HCP wins
+db.set_oauth_tokens(BIZ_ID, "jobber", "j_acc", "j_ref", future_expiry)
+db.set_oauth_tokens(BIZ_ID, "housecall_pro", "h_acc", "h_ref", future_expiry)
+p_both = fsm_sync._get_active_provider(BIZ_ID)
+check("Plan 16 provider-select: both connected -> HCP wins tiebreak",
+      p_both is hcp_fsm._provider)
+
+# Case E: sync_clients with only-HCP routes to HCP (source=import-housecall_pro)
+jobber_fsm.disconnect(BIZ_ID)
+_hcp_sources = []
+_orig_up3 = db.upsert_suggestion
+
+def _track_source3(business_id, number, name, category, reason, source="behavior"):
+    _hcp_sources.append(source)
+    return _orig_up3(business_id, number, name, category, reason, source)
+
+db.upsert_suggestion = _track_source3
+_SINGLE_HCP = [{"name": "Grover G", "phones": ["+12155553001"], "email": "g@example.com"}]
+
+with patch.object(hcp_fsm._provider, "fetch_clients", return_value=_SINGLE_HCP):
+    result_hcp_route = fsm_sync.sync_clients(BIZ_ID)
+
+db.upsert_suggestion = _orig_up3
+check("Plan 16: sync routes to HCP -> clients_fetched=1",
+      result_hcp_route.get("clients_fetched") == 1)
+check("Plan 16: sync source is import-housecall_pro",
+      any(s == "import-housecall_pro" for s in _hcp_sources))
+
+# Case F: sync_clients with only-Jobber routes to Jobber (source=import-jobber)
+hcp_fsm.disconnect(BIZ_ID)
+db.set_oauth_tokens(BIZ_ID, "jobber", "j_acc", "j_ref", future_expiry)
+_job_sources = []
+
+def _track_source4(business_id, number, name, category, reason, source="behavior"):
+    _job_sources.append(source)
+    return _orig_up3(business_id, number, name, category, reason, source)
+
+db.upsert_suggestion = _track_source4
+_SINGLE_JOB = [{"name": "Hannah H", "phones": ["+12155554001"], "email": "h@example.com"}]
+
+with patch.object(jobber_fsm._provider, "fetch_clients", return_value=_SINGLE_JOB):
+    result_job_route = fsm_sync.sync_clients(BIZ_ID)
+
+db.upsert_suggestion = _orig_up3
+check("Plan 16: sync routes to Jobber -> clients_fetched=1",
+      result_job_route.get("clients_fetched") == 1)
+check("Plan 16: sync source is import-jobber when Jobber active",
+      any(s == "import-jobber" for s in _job_sources))
+
+# Case G: push_quote_request for HCP -> no-op (None); fsm_external_id not set
+hcp_fsm.disconnect(BIZ_ID)
+db.set_oauth_tokens(BIZ_ID, "housecall_pro", "h_acc", "h_ref", future_expiry)
+jobber_fsm.disconnect(BIZ_ID)
+
+conn_g = db.get_conn()
+conn_g.execute(
+    "INSERT INTO appointments (business_id, lead_id, status) VALUES (?,?,?)",
+    (BIZ_ID, 1, "booked"))
+conn_g.commit()
+appt_g = conn_g.execute("SELECT last_insert_rowid()").fetchone()[0]
+conn_g.close()
+
+fsm_sync.push_booking_async(BIZ_ID, appt_g, {"name": "Alice"}, {"day": "2026-07-01"})
+time.sleep(0.2)
+
+conn_g2 = db.get_conn()
+row_g = conn_g2.execute(
+    "SELECT fsm_external_id FROM appointments WHERE id=?", (appt_g,)).fetchone()
+conn_g2.close()
+check("Plan 16: HCP push_booking_async no-op -> fsm_external_id stays NULL",
+      row_g and row_g[0] is None)
+
+# Clean up HCP creds for the rest of the suite
+config.HCP_CLIENT_ID = ""
+config.HCP_CLIENT_SECRET = ""
+hcp_fsm.HCP_CLIENT_ID = ""
+hcp_fsm.HCP_CLIENT_SECRET = ""
+config.JOBBER_CLIENT_ID = "testclientid"
+jobber_fsm.JOBBER_CLIENT_ID = "testclientid"
+db.set_oauth_tokens(BIZ_ID, "jobber", "acc_abc", "ref_xyz", future_expiry)
+hcp_fsm.disconnect(BIZ_ID)
+
+
+# ===========================================================================
+# 19. recommended_setup includes hcp item
+# ===========================================================================
+print("\n-- recommended_setup includes hcp (Plan 16 F2) --")
+
+biz_setup = db.get_business(BIZ_ID)
+rec_nc = connections.recommended_setup(biz_setup, hcp_connected=False)
+rec_conn = connections.recommended_setup(biz_setup, hcp_connected=True)
+hcp_item_nc = next((i for i in rec_nc["items"] if i["key"] == "hcp"), None)
+hcp_item_c  = next((i for i in rec_conn["items"] if i["key"] == "hcp"), None)
+check("recommended_setup: hcp item present",                  hcp_item_nc is not None)
+check("recommended_setup: hcp optional=True",                 hcp_item_nc and hcp_item_nc.get("optional"))
+check("recommended_setup: hcp done=False when not connected", hcp_item_nc and not hcp_item_nc.get("done"))
+check("recommended_setup: hcp done=True when connected",      hcp_item_c  and hcp_item_c.get("done"))
+check("recommended_setup: hcp href points to #set-hcp",
+      hcp_item_nc and "#set-hcp" in (hcp_item_nc.get("href") or ""))
 
 
 # ===========================================================================

@@ -429,6 +429,13 @@ plans 13/14). Inert no-ops until the env vars are set — nothing fires without 
   default 24). Then **Settings → Connect Jobber** → OAuth → synced clients land as contact
   *suggestions* to review (Bulk Accept available); accepted clients feed call screening so the AI
   never cold-texts an existing customer. Booked estimates push back as Jobber quote-requests.
+- **Housecall Pro FSM sync (2nd provider)** — alternative to Jobber, same read-only v1 (synced customers
+  feed call screening). Set Render env `HCP_CLIENT_ID`, `HCP_CLIENT_SECRET`, `HCP_REDIRECT_URI`, then
+  **Settings → Connect Housecall Pro**. Provider selection is automatic (whichever you connect; if both
+  Jobber + HCP are ever connected, HCP wins and Jobber pauses — connect only one). Caveats: confirm the
+  exact OAuth **scope strings** in the HCP developer dashboard at app registration (not publicly documented);
+  the booked-estimate **push-back is a no-op in v1** (HCP has no confirmed public customer-notes API) — the
+  value is the inbound customer sync.
 - **Outlook / Microsoft 365 calendar (P6)** — second calendar provider alongside Google; both can be
   connected at once. To flip live: register an Azure AD app (delegated `Calendars.ReadWrite` +
   `offline_access`, account types "any org + personal"), then set Render env `MICROSOFT_CLIENT_ID`,

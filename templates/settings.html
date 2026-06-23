@@ -152,6 +152,44 @@
       <p class="provider-note provider-note-soft">Jobber sync coming soon &mdash; contact us to enable.</p>
     {% endif %}
   {% endcall %}
+
+
+  {% call card(anchor='set-hcp', title='Connect Housecall Pro', subtitle='Sync your existing Housecall Pro customers so the AI recognizes returning clients and never treats them as cold leads.') %}
+    {% if hcpconnected %}<p class="provider-note provider-note-ok">Housecall Pro connected. Syncing your existing customers&hellip; <a href="/callers">Review suggestions</a></p>{% endif %}
+    {% if hcperror %}<p class="provider-note provider-note-err">{% if hcperror == 'unconfigured' %}Set HCP_CLIENT_ID and HCP_CLIENT_SECRET to enable.{% else %}We couldn't finish connecting Housecall Pro. Please try again.{% endif %}</p>{% endif %}
+    {% if hcp_configured %}
+      <div class="provider-grid">
+        <div class="provider-card{{ ' is-connected' if hcp_connected else '' }}" data-provider="housecall_pro">
+          <span class="provider-logo" style="font-size:1.2rem;font-weight:700;color:var(--accent)">H</span>
+          <span class="provider-meta">
+            <span class="provider-name">Housecall Pro</span>
+            <span class="provider-status">
+              {% if hcp_connected %}
+                Connected{% if fsm_clients_synced and hcp_connected %} &mdash; {{ fsm_clients_synced }} client{{ 's' if fsm_clients_synced != 1 else '' }} synced{% endif %}
+              {% else %}
+                Not connected
+              {% endif %}
+            </span>
+          </span>
+          {% if hcp_connected %}
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="hcp-sync-btn">Sync now</button>
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="hcp-disconnect-btn" style="margin-left:0.5rem">Disconnect</button>
+          {% else %}
+            <a class="btn btn-primary btn-sm provider-btn" href="/api/fsm/hcp/connect">Connect</a>
+          {% endif %}
+        </div>
+      </div>
+      {% if hcp_connected %}
+        <p style="margin-top:var(--space-3);font-size:0.88rem;color:var(--text-muted)">
+          Synced customers appear as suggestions for you to confirm.
+          <a href="/api/suggestions/bulk">Bulk accept</a> to recognize them all at once.
+          {% if fsm_last_synced_at %} Last synced: {{ fsm_last_synced_at[:10] }}.{% endif %}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="provider-note provider-note-soft">Housecall Pro sync coming soon &mdash; contact us to enable.</p>
+    {% endif %}
+  {% endcall %}
   <script>
   (function(){
     var csrf = function(){ return (document.querySelector('[name=_csrf]')||{}).value || ''; };
@@ -171,6 +209,26 @@
       discBtn.addEventListener('click', function(){
         if (!confirm('Disconnect Jobber? Your imported contact suggestions will remain.')) return;
         fetch('/api/fsm/jobber/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var hcpSyncBtn = document.getElementById('hcp-sync-btn');
+    if (hcpSyncBtn) {
+      hcpSyncBtn.addEventListener('click', function(){
+        hcpSyncBtn.disabled = true;
+        hcpSyncBtn.textContent = 'Syncing…';
+        fetch('/api/fsm/sync', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(d){ hcpSyncBtn.textContent = d.ok ? 'Synced' : (d.error || 'Error'); })
+          .catch(function(){ hcpSyncBtn.textContent = 'Error'; });
+      });
+    }
+    var hcpDiscBtn = document.getElementById('hcp-disconnect-btn');
+    if (hcpDiscBtn) {
+      hcpDiscBtn.addEventListener('click', function(){
+        if (!confirm('Disconnect Housecall Pro? Your synced contact suggestions will remain.')) return;
+        fetch('/api/fsm/hcp/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
           .then(function(r){return r.json();})
           .then(function(){ location.reload(); });
       });

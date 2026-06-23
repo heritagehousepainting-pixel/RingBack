@@ -1,10 +1,15 @@
 """FSM sync orchestration layer.
 
-Consumes the FSMProvider interface (jobber_fsm) and holds all the business
-logic: client-sync → contact suggestions, job enrichment, booking push, and
-the periodic-sync cadence.
+Consumes the FSMProvider interface and holds all the business logic:
+client-sync -> contact suggestions, job enrichment, booking push, and the
+periodic-sync cadence.
 
-Gated: every entry point is a safe no-op when JOBBER_CLIENT_ID is unset.
+Provider routing (Option C — owner-approved): _get_active_provider returns the
+single active provider for a business. HCP > Jobber tiebreak when both connected
+(logs a warning; never double-fires). `configured()` / `push_configured()` return
+True when EITHER provider has credentials.
+
+Gated: every entry point is a safe no-op when no provider has credentials.
 Defensive: all errors swallowed + logged; never raises into a request or tick.
 
 F1 (critical): sync_clients calls db.upsert_suggestion DIRECTLY — it does NOT
@@ -17,6 +22,7 @@ from datetime import datetime, timezone
 
 import db
 import jobber_fsm
+import hcp_fsm
 from config import FSM_SYNC_INTERVAL_HOURS
 
 
@@ -24,39 +30,83 @@ from config import FSM_SYNC_INTERVAL_HOURS
 # Gate helpers
 # ------------------------------------------------------------------
 def configured() -> bool:
-    """True if the Jobber integration has credentials set."""
-    return jobber_fsm.configured()
+    """True if ANY FSM provider has credentials set."""
+    return jobber_fsm.configured() or hcp_fsm.configured()
 
 
 def push_configured() -> bool:
     """True if the push (quote-request) path is configured.
 
-    In v1 this is the same gate as configured() — push uses the same OAuth
-    credentials. A future plan may add a separate gate for write scopes.
+    In v1 this is the same gate as configured(). Jobber supports real push;
+    HCP push is a v1 no-op but the credential gate still returns True so the
+    booking path is attempted (the no-op is transparent to callers).
     """
-    return jobber_fsm.configured()
+    return jobber_fsm.configured() or hcp_fsm.configured()
+
+
+# ------------------------------------------------------------------
+# Provider selection (Option C)
+# ------------------------------------------------------------------
+def _get_active_provider(business_id: int):
+    """Return the single active FSMProvider for this business, or None.
+
+    HCP > Jobber tiebreak: if both are connected, HCP wins and a warning is
+    logged. This is safe for single-tenant dogfood (no double-fire); a per-
+    business fsm_provider column is the v2 path for multi-tenant multi-provider.
+    """
+    hcp_ok = hcp_fsm.configured() and hcp_fsm.is_connected(business_id)
+    job_ok = jobber_fsm.configured() and jobber_fsm.is_connected(business_id)
+
+    if hcp_ok and job_ok:
+        print(
+            f"[firstback] fsm: both HCP and Jobber connected for biz {business_id}; "
+            "using HCP (tiebreak). Jobber sync paused until HCP is disconnected.",
+            file=sys.stderr, flush=True,
+        )
+        return hcp_fsm._provider
+
+    if hcp_ok:
+        return hcp_fsm._provider
+
+    if job_ok:
+        return jobber_fsm._provider
+
+    return None
 
 
 # ------------------------------------------------------------------
 # Sync clients (F1: direct upsert_suggestion, NOT contact_import.ingest)
 # ------------------------------------------------------------------
 def sync_clients(business_id: int) -> dict:
-    """Pull Jobber clients and queue them as pending suggestions in the review
-    inbox (category='customer', source='import-jobber').
+    """Pull FSM clients and queue them as pending suggestions in the review
+    inbox (category='customer', source='import-{provider}').
 
     Calls db.upsert_suggestion DIRECTLY — bypasses contact_import.ingest whose
     presort() returns None for anyone without a prior booking and without an org
-    field, which drops 100% of first-sync Jobber customers.
+    field, which drops 100% of first-sync customers.
 
-    Returns {'clients_fetched': N, 'suggested': N, 'skipped': N}.
+    Routes to the active provider for this business (HCP or Jobber). Returns
+    {'clients_fetched': N, 'suggested': N, 'skipped': N}.
     """
     if not configured():
         return {"clients_fetched": 0, "suggested": 0, "skipped": 0}
-    if not jobber_fsm.is_connected(business_id):
+
+    provider = _get_active_provider(business_id)
+    if provider is None:
         return {"clients_fetched": 0, "suggested": 0, "skipped": 0}
 
+    provider_key = provider.PROVIDER_KEY  # e.g. "jobber" or "housecall_pro"
+    source = f"import-{provider_key}"     # e.g. "import-jobber" or "import-housecall_pro"
+
+    # Human-readable provider name for the reason string.
+    _provider_labels = {
+        "jobber": "Jobber",
+        "housecall_pro": "Housecall Pro",
+    }
+    provider_label = _provider_labels.get(provider_key, provider_key)
+
     try:
-        clients = jobber_fsm.fetch_clients(business_id)
+        clients = provider.fetch_clients(business_id)
     except Exception as e:
         print(f"[firstback] fsm sync_clients fetch error (biz {business_id}): {e}",
               file=sys.stderr, flush=True)
@@ -86,12 +136,12 @@ def sync_clients(business_id: int) -> dict:
             if key in skip:
                 skipped += 1
                 continue
-            # F1: direct call — category is always "customer" for Jobber clients.
+            # F1: direct call — category is always "customer" for FSM clients.
             db.upsert_suggestion(
                 business_id, key, name,
                 category="customer",
-                reason="Existing Jobber client",
-                source="import-jobber",
+                reason=f"Existing {provider_label} client",
+                source=source,
             )
             suggested += 1
 
@@ -102,15 +152,19 @@ def sync_clients(business_id: int) -> dict:
 # Sync jobs (enrich existing suggestions / contacts with job context)
 # ------------------------------------------------------------------
 def sync_jobs(business_id: int) -> dict:
-    """Pull recent Jobber jobs and enrich matching contact suggestions with a note.
+    """Pull recent FSM jobs and enrich matching contact suggestions with a note.
 
     Returns {'jobs_fetched': N, 'enriched': N}.
     """
-    if not configured() or not jobber_fsm.is_connected(business_id):
+    if not configured():
+        return {"jobs_fetched": 0, "enriched": 0}
+
+    provider = _get_active_provider(business_id)
+    if provider is None:
         return {"jobs_fetched": 0, "enriched": 0}
 
     try:
-        jobs = jobber_fsm.fetch_jobs(business_id)
+        jobs = provider.fetch_jobs(business_id)
     except Exception as e:
         print(f"[firstback] fsm sync_jobs fetch error (biz {business_id}): {e}",
               file=sys.stderr, flush=True)
@@ -128,17 +182,24 @@ def sync_jobs(business_id: int) -> dict:
 # ------------------------------------------------------------------
 def push_booking_async(business_id: int, appointment_id: int,
                        lead: dict, booking: dict) -> None:
-    """Push a booked estimate to Jobber as a quote request in a daemon thread.
+    """Push a booked estimate to the active FSM provider in a daemon thread.
 
-    Stores the Jobber request id in appointments.fsm_external_id on success.
+    For Jobber: stores the request id in appointments.fsm_external_id on success.
+    For HCP: push_quote_request is a v1 no-op (returns None); fsm_external_id is
+    NOT set (no confirmed endpoint — never claim "pushed").
+
     Failure never breaks the booking — the thread is fully isolated.
     """
-    if not configured() or not jobber_fsm.is_connected(business_id):
+    if not configured():
+        return
+
+    provider = _get_active_provider(business_id)
+    if provider is None:
         return
 
     def _push():
         try:
-            ext_id = jobber_fsm.push_quote_request(business_id, lead, booking)
+            ext_id = provider.push_quote_request(business_id, lead, booking)
             if ext_id and appointment_id:
                 now = datetime.now(timezone.utc).isoformat()
                 db.set_fsm_external_id(appointment_id, business_id, ext_id, now)
@@ -185,7 +246,8 @@ def maybe_sync_all(now=None) -> dict:
             continue
         checked += 1
 
-        if not jobber_fsm.is_connected(bid):
+        # Skip businesses with no active provider
+        if _get_active_provider(bid) is None:
             continue
 
         # Check interval
@@ -199,12 +261,12 @@ def maybe_sync_all(now=None) -> dict:
                 if elapsed_h < interval_hours:
                     continue
             except (ValueError, TypeError):
-                pass  # bad timestamp → sync anyway
+                pass  # bad timestamp -> sync anyway
 
         # Run sync
         try:
             result = sync_clients(bid)
-            # Store the total clients fetched from Jobber for the settings card.
+            # Store the total clients fetched for the settings card.
             clients_fetched = result.get("clients_fetched", 0)
             db.set_fsm_sync_stamp(bid, now_dt.isoformat(), clients_fetched)
             synced += 1

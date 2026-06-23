@@ -177,6 +177,15 @@ try:
 except (TypeError, ValueError):
     FSM_SYNC_INTERVAL_HOURS = 24.0
 
+# --- Housecall Pro FSM sync (optional; gated — all entry points are safe no-ops when unset) ---
+# Register your app at the Housecall Pro developer portal; add the redirect URI to your OAuth app.
+# Scopes needed: read:customers read:jobs (verify exact strings in the developer dashboard —
+# HCP scopes are not publicly documented as of 2026-06).
+HCP_CLIENT_ID = os.environ.get("HCP_CLIENT_ID", "")
+HCP_CLIENT_SECRET = os.environ.get("HCP_CLIENT_SECRET", "")
+HCP_REDIRECT_URI = os.environ.get(
+    "HCP_REDIRECT_URI", "http://127.0.0.1:8800/api/fsm/hcp/callback")
+
 # --- Google Calendar (optional real two-way sync) -------------------------
 # To turn on: in Google Cloud Console create an OAuth 2.0 Client ID of type
 # "Web application", add the redirect URI below to its "Authorized redirect

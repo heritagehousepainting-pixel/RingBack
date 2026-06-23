@@ -40,6 +40,7 @@ import contact_import
 import google_contacts
 import growth
 import jobber_fsm
+import hcp_fsm
 import fsm_sync
 from config import (APP_NAME, TAGLINE, DEBUG, SECRET_KEY, TASKS_SECRET,
                     SESSION_COOKIE_SECURE, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD,
@@ -1352,7 +1353,11 @@ def settings():
                            fsm_last_synced_at=biz.get("fsm_last_synced_at"),
                            fsm_clients_synced=biz.get("fsm_clients_synced") or 0,
                            fsmconnected=request.args.get("fsmconnected"),
-                           fsmerror=request.args.get("fsmerror"))
+                           fsmerror=request.args.get("fsmerror"),
+                           hcp_configured=hcp_fsm.configured(),
+                           hcp_connected=hcp_fsm.is_connected(biz["id"]),
+                           hcpconnected=request.args.get("hcpconnected"),
+                           hcperror=request.args.get("hcperror"))
 
 
 @app.route("/settings/password", methods=["POST"])
@@ -1589,6 +1594,7 @@ def setup():
         contacts_connected=google_contacts.is_connected(biz["id"]),
         jobber_connected=(fsm_sync.push_configured() and jobber_fsm.is_connected(biz["id"])),
         outlook_connected=(outlook_cal.configured() and outlook_cal.is_connected(biz["id"])),
+        hcp_connected=(hcp_fsm.configured() and hcp_fsm.is_connected(biz["id"])),
         password_changed=not (user and check_password_hash(user["password_hash"], SEED_OWNER_PASSWORD)),
         ai_default=config.DEFAULT_BUSINESS.get("ai_instructions", ""))
     return render_template(
@@ -2784,17 +2790,61 @@ def fsm_jobber_disconnect():
     return jsonify(connected=False)
 
 
+# ---- Plan 16: FSM / Housecall Pro OAuth + sync routes ----
+
+@app.route("/api/fsm/hcp/connect")
+@login_required
+def fsm_hcp_connect():
+    """Start the Housecall Pro OAuth2 flow. Redirect to the HCP authorization page."""
+    if not hcp_fsm.configured():
+        return redirect("/settings?hcperror=unconfigured")
+    state = secrets.token_urlsafe(16)
+    session["fsm_h_state"] = state   # CSRF guard, verified + consumed on callback
+    return redirect(hcp_fsm.auth_url(state))
+
+
+@app.route("/api/fsm/hcp/callback")
+@login_required
+def fsm_hcp_callback():
+    """Housecall Pro OAuth2 callback: exchange the code for tokens and trigger a first sync."""
+    expected = session.pop("fsm_h_state", None)
+    if request.args.get("error") or not request.args.get("code"):
+        return redirect("/settings?hcperror=denied")
+    if not expected or request.args.get("state") != expected:
+        return redirect("/settings?hcperror=state")
+    try:
+        hcp_fsm.connect_with_code(current_business()["id"], request.args["code"])
+    except Exception as e:
+        print(f"[firstback] hcp connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?hcperror=exchange")
+    # Kick off an immediate background sync now that we're connected.
+    biz_id = current_business()["id"]
+    threading.Thread(target=_fsm_background_sync, args=(biz_id,), daemon=True).start()
+    return redirect("/settings?hcpconnected=1")
+
+
+@app.route("/api/fsm/hcp/disconnect", methods=["POST"])
+@login_required
+def fsm_hcp_disconnect():
+    """Disconnect Housecall Pro for this business. Keeps already-synced contact suggestions."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    hcp_fsm.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
 @app.route("/api/fsm/sync", methods=["POST"])
 @login_required
 def fsm_sync_now():
-    """Trigger an immediate Jobber client sync for this business."""
+    """Trigger an immediate FSM client sync for this business (Jobber or HCP)."""
     if not _csrf_ok():
         return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
-    if not jobber_fsm.configured():
-        return jsonify(error="Jobber sync is not configured."), 400
-    if not jobber_fsm.is_connected(biz["id"]):
-        return jsonify(error="Connect Jobber first."), 400
+    # FIX-10: provider-neutral checks — works for both Jobber and HCP.
+    if not fsm_sync.configured():
+        return jsonify(error="No FSM provider is configured."), 400
+    if fsm_sync._get_active_provider(biz["id"]) is None:
+        return jsonify(error="Connect an FSM provider (Jobber or Housecall Pro) first."), 400
     try:
         result = fsm_sync.sync_clients(biz["id"])
         db.set_fsm_sync_stamp(biz["id"], datetime.now(timezone.utc).isoformat(),

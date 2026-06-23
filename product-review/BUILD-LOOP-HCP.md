@@ -29,10 +29,18 @@ option and flag if it's an owner decision.
       only customer_id). **Push = v1 no-op** (no public notes endpoint/phone filter). Scopes unverifiable
       → env-gated TODO. Audit + FIX-1..11 at `product-review/plan-audits/16-audit.md`. Q7: Option C approved
       (surface to owner). Code assumptions all confirmed.
-- [ ] **S3 BUILD** (sonnet, write-capable) → hcp_fsm.py (FIX-1..8) + fsm_sync routing refactor + app routes
-      + connections F2 + settings card + mocked tests (corrected shapes). ← **IN PROGRESS**
-- [ ] **S4 BUILD-AUDIT** (sonnet) → review (security/honesty/smart-quote scan) + tests green. Orchestrator commits/pushes staging.
-- [ ] **S5 HANDOFF** → SETUP_NEEDED HCP creds; memory; loop stops; then kick the inbound-voice loop.
+- [x] **S3 BUILD** (sonnet) → DONE. NEW `hcp_fsm.py`, `test_hcp_fsm.py` (69); fsm_sync `_get_active_provider`
+      refactor (7 call sites); app HCP routes; connections F2; settings HCP card; +12 fsm_sync provider tests.
+      FIX-1..8 applied.
+- [x] **S4 BUILD-AUDIT** → inline. **SHIP**, no P1 (`plan-audits/16-build-audit.md`). Jobber non-regression
+      confirmed (fsm_sync 92/0); HCP push true no-op; settings parses (no delimiter corruption); /settings 200.
+- [x] **S5 HANDOFF** → SETUP_NEEDED HCP note added; memory updated. **HCP batch committed + pushed to staging.**
+
+## Outcome (2026-06-23)
+Housecall Pro shipped to `staging` as a 2nd read-only FSM provider (commit below), gated/inert until
+`HCP_CLIENT_ID/SECRET` set. v1 = customer sync feeding screening; push is an honest no-op (no public HCP
+notes endpoint). Provider-selection Option C (HCP>Jobber). Owner gates main (NOT promoted). **HCP LOOP COMPLETE.**
+Next: live inbound voice answering loop.
 
 ## Log
 - 2026-06-23: loop created (after Jobber P2 + Outlook P6 + voice P1 already on staging); S1 plan agent dispatched.

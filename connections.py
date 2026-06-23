@@ -171,6 +171,7 @@ def golive_summary(business, sms_configured=None):
 # how golive_summary takes sms_configured -- so this stays pure and unit-testable.
 def recommended_setup(business, *, calendar_connected=False, contacts_connected=False,
                       jobber_connected=False, outlook_connected=False,
+                      hcp_connected=False,
                       password_changed=False, ai_default=""):
     """The recommended-connections checklist (the "Fully set up" tier). Returns
     {items: [{key,title,value,done,optional,href,cta}], done, total}. `optional` marks
@@ -178,7 +179,8 @@ def recommended_setup(business, *, calendar_connected=False, contacts_connected=
     they're off. `total`/`done` count ALL items; the live tier is computed elsewhere.
 
     `calendar_connected` = Google Calendar linked; `outlook_connected` = Outlook linked.
-    Both can be True simultaneously (additive providers)."""
+    Both can be True simultaneously (additive providers).
+    `hcp_connected` = Housecall Pro linked (Plan 16)."""
     biz = (business if isinstance(business, dict) else db.get_business(business)) or {}
     ai = (biz.get("ai_instructions") or "").strip()
     ai_done = bool(ai) and ai != (ai_default or "").strip()
@@ -193,6 +195,7 @@ def recommended_setup(business, *, calendar_connected=False, contacts_connected=
         ("scheduling", "Scheduling & availability", "Your work days, estimate windows, and buffer",         bool(biz.get("estimate_times") or biz.get("working_days") or biz.get("buffer_minutes")), True, "/settings#set-scheduling", "Adjust"),
         ("contacts",   "Import your contacts",      "So the screen recognizes people you already know",     contacts_connected,   True,  "/api/contacts/google/connect",  "Connect"),
         ("jobber",     "Sync Jobber clients",       "Imports existing clients so the AI recognizes them",   jobber_connected,     True,  "/settings#set-jobber",          "Connect"),
+        ("hcp",        "Sync Housecall Pro clients", "Imports existing clients so the AI recognizes them",  hcp_connected,        True,  "/settings#set-hcp",             "Connect"),
         ("outlook",    "Connect Outlook Calendar",  "Booked estimates also sync to Outlook / Microsoft 365", outlook_connected,  True,  "/api/calendar/outlook/connect", "Connect"),
         ("password",   "Set your own password",     "Move off the starter password",                        password_changed,     False, "/settings#set-password",        "Change"),
     ]
