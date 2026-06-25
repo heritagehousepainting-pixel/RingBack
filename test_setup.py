@@ -66,8 +66,12 @@ def check(name, cond):
 
 
 def login():
-    return client.post("/login", data={"email": config.SEED_OWNER_EMAIL,
-                                        "password": config.SEED_OWNER_PASSWORD})
+    r = client.post("/login", data={"email": config.SEED_OWNER_EMAIL,
+                                    "password": config.SEED_OWNER_PASSWORD})
+    with client.session_transaction() as _s:
+        _s["csrf_token"] = "test_csrf"
+    client.environ_base["HTTP_X_CSRF_TOKEN"] = "test_csrf"
+    return r
 
 
 def reset_biz():
@@ -590,8 +594,8 @@ check("dashboard renders with golive context", client.get("/dashboard").status_c
 # ====================== Fully-set-up tier (recommended connections) ======================
 # Pure status aggregation with dependency-injected signals; must never touch the live tier.
 rec_empty = connections.recommended_setup({}, ai_default="DEFAULT")
-check("recommended: exposes 9 items", len(rec_empty["items"]) == 9)
-check("recommended: total counts all items", rec_empty["total"] == 9)
+check("recommended: exposes 12 items", len(rec_empty["items"]) == 12)
+check("recommended: total counts all items", rec_empty["total"] == 12)
 check("recommended: nothing configured -> done 0", rec_empty["done"] == 0)
 check("recommended: items carry key/title/href/cta/done/optional",
       all(set(it) >= {"key", "title", "href", "cta", "done", "optional"} for it in rec_empty["items"]))
@@ -601,12 +605,15 @@ biz_cfg = {"ai_instructions": "Talk like a pro", "alert_sms": "+12150000000",
            "screen_mode": "enforce", "reminders_enabled": 1, "voice_callback_enabled": 1,
            "estimate_times": "9:00 AM"}
 rec_cfg = connections.recommended_setup(biz_cfg, calendar_connected=True,
-                                        contacts_connected=True, password_changed=True,
+                                        contacts_connected=True, jobber_connected=True,
+                                        outlook_connected=True,
+                                        hcp_connected=True,
+                                        password_changed=True,
                                         ai_default="DEFAULT")
 done_keys = {it["key"] for it in rec_cfg["items"] if it["done"]}
-check("recommended: all nine detect done when configured", rec_cfg["done"] == 9)
-check("recommended: calendar/contacts/password done from injected signals",
-      {"calendar", "contacts", "password"} <= done_keys)
+check("recommended: all twelve detect done when configured", rec_cfg["done"] == 12)
+check("recommended: calendar/contacts/jobber/outlook/hcp/password done from injected signals",
+      {"calendar", "contacts", "jobber", "outlook", "hcp", "password"} <= done_keys)
 
 # Honest: the untouched default AI instructions do NOT count as "taught your AI".
 rec_default_ai = connections.recommended_setup({"ai_instructions": "DEFAULT"}, ai_default="DEFAULT")

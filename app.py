@@ -26,6 +26,7 @@ import ai
 import assistant
 import convos
 import google_cal
+import outlook_cal
 import messaging
 import mail
 import alerts
@@ -38,6 +39,9 @@ import reputation
 import contact_import
 import google_contacts
 import growth
+import jobber_fsm
+import hcp_fsm
+import fsm_sync
 from config import (APP_NAME, TAGLINE, DEBUG, SECRET_KEY, TASKS_SECRET,
                     SESSION_COOKIE_SECURE, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD,
                     app_tz, VOICE_PUBLIC_URL, INTERNAL_SECRET,
@@ -251,10 +255,15 @@ def _csrf_token():
 
 
 def _csrf_ok():
-    """The form's `_csrf` matches the session token (constant-time). Defense in depth on top
-    of the SameSite session cookie."""
+    """The request CSRF token matches the session token (constant-time).
+
+    Form posts carry `_csrf`; JSON/multipart fetches carry the same value in
+    `X-CSRF-Token`. This keeps the defense consistent across regular forms,
+    URL-encoded JS helpers, JSON APIs, and file uploads.
+    """
     tok = session.get("csrf_token")
-    return bool(tok) and secrets.compare_digest(tok, request.form.get("_csrf", ""))
+    sent = request.headers.get("X-CSRF-Token") or request.form.get("_csrf", "")
+    return bool(tok and sent) and secrets.compare_digest(tok, sent)
 
 
 def _sanitize_history(raw):
@@ -279,7 +288,8 @@ def _sanitize_history(raw):
 @app.route("/")
 def landing():
     # The front door — the onboarding hero.
-    return render_template("onboarding.html")
+    return render_template("onboarding.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/tour")
@@ -472,12 +482,14 @@ def auth_reset():
 # ---- Marketing pages (linked from the front door) ----
 @app.route("/product")
 def product():
-    return render_template("product.html")
+    return render_template("product.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/solutions")
 def solutions():
-    return render_template("solutions.html")
+    return render_template("solutions.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL))
 
 
 @app.route("/resources")
@@ -492,7 +504,9 @@ def company():
 
 @app.route("/pricing")
 def pricing():
-    return render_template("pricing.html")
+    return render_template("pricing.html",
+                           voice_configured=bool(VOICE_PUBLIC_URL),
+                           billing_live=_billing.configured())
 
 
 @app.route("/contact", methods=["GET", "POST"])
@@ -1104,6 +1118,8 @@ def training_convo(convo_id):
 @app.route("/training/teach", methods=["POST"])
 @login_required
 def training_teach():
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     pattern = (request.form.get("pattern") or "").strip()
     action = (request.form.get("action") or "").strip()
@@ -1123,6 +1139,8 @@ def training_teach():
 @app.route("/training/resolve", methods=["POST"])
 @login_required
 def training_resolve():
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     flag_id = request.form.get("flag_id")
     if flag_id and flag_id.isdigit():
@@ -1134,6 +1152,8 @@ def training_resolve():
 @login_required
 def digest_send():
     """Email this owner their weekly digest now (gated/simulated until SMTP is set)."""
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     user = current_user()
     em = convos.digest_email(biz)
@@ -1218,6 +1238,8 @@ def _save_screening_prefs(business_id, screen_hard, screen_mid, reputation_enabl
 def settings():
     biz = current_business()
     if request.method == "POST":
+        if not _csrf_ok():
+            abort(403)
         fields = {k: request.form.get(k, "") for k in
                   ["name", "trade", "service_area", "hours", "owner_name",
                    "phone", "ai_instructions"]}
@@ -1270,7 +1292,8 @@ def settings():
         db.update_phone_voice(
             biz["id"],
             forward_to=(request.form.get("forward_to") or "").strip(),
-            voice_callback_enabled=1 if request.form.get("voice_callback_enabled") else 0)
+            voice_callback_enabled=1 if request.form.get("voice_callback_enabled") else 0,
+            inbound_voice_enabled=1 if request.form.get("inbound_voice_enabled") else 0)
         # Per-business screening mode: blank/"default" -> NULL (inherit the app default).
         db.set_screen_mode(biz["id"], (request.form.get("screen_mode") or "").strip())
         # Sensitivity preset: radio -> (screen_hard, screen_mid) stored per-tenant.
@@ -1304,6 +1327,10 @@ def settings():
                            google_connected=google_cal.is_connected(biz["id"]),
                            gconnected=request.args.get("gconnected"),
                            gerror=request.args.get("gerror"),
+                           outlook_configured=outlook_cal.configured(),
+                           outlook_connected=outlook_cal.is_connected(biz["id"]),
+                           olconnected=request.args.get("olconnected"),
+                           olerror=request.args.get("olerror"),
                            pw=request.args.get("pw"),
                            pwerror=request.args.get("pwerror"),
                            sms_configured=messaging.configured(),
@@ -1322,12 +1349,24 @@ def settings():
                            reputation_enabled=bool(biz.get("reputation_enabled")),
                            screening_hold=bool(biz.get("screening_hold")),
                            growth_mode=db.growth_mode(biz["id"]),
-                           growth_saved=request.args.get("growth_saved"))
+                           growth_saved=request.args.get("growth_saved"),
+                           jobber_configured=jobber_fsm.configured(),
+                           jobber_connected=jobber_fsm.is_connected(biz["id"]),
+                           fsm_last_synced_at=biz.get("fsm_last_synced_at"),
+                           fsm_clients_synced=biz.get("fsm_clients_synced") or 0,
+                           fsmconnected=request.args.get("fsmconnected"),
+                           fsmerror=request.args.get("fsmerror"),
+                           hcp_configured=hcp_fsm.configured(),
+                           hcp_connected=hcp_fsm.is_connected(biz["id"]),
+                           hcpconnected=request.args.get("hcpconnected"),
+                           hcperror=request.args.get("hcperror"))
 
 
 @app.route("/settings/password", methods=["POST"])
 @login_required
 def settings_password():
+    if not _csrf_ok():
+        abort(403)
     user = current_user()
     current = request.form.get("current_password") or ""
     new = request.form.get("new_password") or ""
@@ -1555,6 +1594,9 @@ def setup():
         biz,
         calendar_connected=google_cal.is_connected(biz["id"]),
         contacts_connected=google_contacts.is_connected(biz["id"]),
+        jobber_connected=(fsm_sync.push_configured() and jobber_fsm.is_connected(biz["id"])),
+        outlook_connected=(outlook_cal.configured() and outlook_cal.is_connected(biz["id"])),
+        hcp_connected=(hcp_fsm.configured() and hcp_fsm.is_connected(biz["id"])),
         password_changed=not (user and check_password_hash(user["password_hash"], SEED_OWNER_PASSWORD)),
         ai_default=config.DEFAULT_BUSINESS.get("ai_instructions", ""))
     return render_template(
@@ -1573,6 +1615,8 @@ def setup():
 @app.route("/setup/profile", methods=["POST"])
 @login_required
 def setup_profile():
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     if biz is None:
         return redirect("/dashboard")
@@ -1595,6 +1639,8 @@ def setup_number():
     """Give the business its FirstBack number: buy a new local one (auto-wires the
     Voice+SMS webhooks via provision_number) or attach a number already owned in the
     Twilio account (the manual path, now one click)."""
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     if biz is None:
         return redirect("/dashboard")
@@ -1625,6 +1671,8 @@ def setup_a2p():
     (unchanged). `mode=auto` (default) dispatches via connections.submit_a2p which
     calls the Twilio Write API when Trust Hub is configured. `mode=submit` is an alias
     for `auto` kept for template back-compat."""
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     if biz is None:
         return redirect("/dashboard")
@@ -1665,6 +1713,8 @@ def setup_forwarding():
     forwarding is live. forwarding_confirmed is intentionally left False here; it is
     set True ONLY when the sentinel call arrives inbound (twilio_voice_inbound).
     [DECIDED] Honesty rule: never set confirmed=True on 'placed'."""
+    if not _csrf_ok():
+        abort(403)
     biz = current_business()
     if biz is None:
         return redirect("/dashboard")
@@ -1919,8 +1969,17 @@ def open_conversation(biz, lead):
                     f"Estimate: {lead['name']}",
                     f"FirstBack booked a free estimate for {lead['name']} ({lead.get('phone')}).",
                     gday, gtime, tz=_tz)
+                # Plan 14: mirror onto Outlook Calendar (additive, guarded, daemon thread).
+                if outlook_cal.is_connected(biz["id"]):
+                    outlook_cal.create_event_async(
+                        biz["id"], appt_id,
+                        f"Estimate: {lead['name']}",
+                        f"FirstBack booked a free estimate for {lead['name']} ({lead.get('phone')}).",
+                        gday, gtime, tz=_tz)
                 reminders.enqueue_reminder(biz, lead, gday, gtime)
                 reminders.enqueue_morning_reminder(biz, lead, gday, gtime)
+                # Plan 13: push to Jobber as a quote request (additive, guarded daemon thread).
+                fsm_sync.push_booking_async(biz["id"], appt_id, lead, {"day": gday, "when": booking})
             # Phase-4: a first-turn booking is a real booking -> fire the owner's
             # Show-Up-Prepared alert + the ROI milestone check, same as handle_inbound
             # (previously only the reply-turn path did this).
@@ -1965,7 +2024,19 @@ def handle_inbound(biz, lead, body):
         _owner_cell = (biz.get("alert_sms") or biz.get("phone") or "").strip()
         _already_called = lead.get("dispatcher_call_last_at")
         if _owner_cell and not _already_called:
-            _disp_base = VOICE_PUBLIC_URL.rstrip("/") if VOICE_PUBLIC_URL else None
+            # Gate on VOICE_PUBLIC_URL (master switch), but build the TwiML URL from
+            # the FLASK base (PUBLIC_BASE_URL or _public_base()) because the
+            # /twiml/dispatcher/<id> route lives on the Flask app, NOT the separate
+            # voice service.  Using VOICE_PUBLIC_URL here causes a 404 in split-service
+            # prod where the two services run at different origins.
+            # Prefer the explicit config value so this also works in unit tests that
+            # call handle_inbound() outside a request context.
+            if VOICE_PUBLIC_URL:
+                _fb = (config.PUBLIC_BASE_URL.rstrip("/")
+                       if config.PUBLIC_BASE_URL else _public_base().rstrip("/"))
+                _disp_base = _fb
+            else:
+                _disp_base = None
             if _disp_base:
                 _disp_url = f"{_disp_base}/twiml/dispatcher/{lead_id}"
                 _call_result = messaging.place_call(biz, _owner_cell, _disp_url)
@@ -1993,7 +2064,8 @@ def handle_inbound(biz, lead, body):
                                               "phone": lead.get("phone")})
 
     history = db.get_messages(lead_id)
-    exclude = google_cal.busy_slot_ids(biz["id"])  # Google conflicts, empty if not connected
+    # Merge Google + Outlook busy slots; both return empty set when not connected.
+    exclude = google_cal.busy_slot_ids(biz["id"]) | outlook_cal.busy_slot_ids(biz["id"])
     reply, booking = ai.generate_reply(biz, history, exclude_slot_ids=exclude,
                                        lead_id=lead_id)
     db.add_message(lead_id, "out", reply)
@@ -2054,8 +2126,17 @@ def handle_inbound(biz, lead, body):
                     f"Estimate: {lead['name']}",
                     f"FirstBack booked a free estimate for {lead['name']} ({lead['phone']}).",
                     gday, gtime, tz=_tz)
+                # Plan 14: mirror onto Outlook Calendar (additive, guarded, daemon thread).
+                if outlook_cal.is_connected(biz["id"]):
+                    outlook_cal.create_event_async(
+                        biz["id"], appt_id,
+                        f"Estimate: {lead['name']}",
+                        f"FirstBack booked a free estimate for {lead['name']} ({lead['phone']}).",
+                        gday, gtime, tz=_tz)
                 reminders.enqueue_reminder(biz, lead, gday, gtime)
                 reminders.enqueue_morning_reminder(biz, lead, gday, gtime)
+                # Plan 13: push to Jobber as a quote request (additive, guarded daemon thread).
+                fsm_sync.push_booking_async(biz["id"], appt_id, lead, {"day": gday, "when": booking})
         else:
             # F03 double-booking recovery: slot was taken between turns.
             # Generate a recovery reply offering the next open slot.
@@ -2084,6 +2165,8 @@ def handle_inbound(biz, lead, body):
 @app.route("/api/sim/incoming", methods=["POST"])
 @login_required
 def sim_incoming():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     data = request.get_json(silent=True) or {}  # name/phone/scenario optional
     biz = current_business()
     scenario = (data.get("scenario") or "prospect").strip().lower()
@@ -2109,6 +2192,8 @@ def sim_incoming():
 @app.route("/api/sim/reply", methods=["POST"])
 @login_required
 def sim_reply():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     data, err = _get_json("lead_id", "body")
     if err:
         return err
@@ -2160,6 +2245,8 @@ def api_calendar():
 @app.route("/api/calendar/busy", methods=["POST"])
 @login_required
 def api_calendar_busy():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     data, err = _get_json("date")
     if err:
         return err
@@ -2171,6 +2258,8 @@ def api_calendar_busy():
 @app.route("/api/integrations", methods=["POST"])
 @login_required
 def api_integrations():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     data, err = _get_json("provider")
     if err:
         return err
@@ -2209,7 +2298,45 @@ def google_callback():
 @app.route("/api/calendar/google/disconnect", methods=["POST"])
 @login_required
 def google_disconnect():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     google_cal.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
+# ---- Real Outlook Calendar OAuth (gated on MICROSOFT_CLIENT_ID/SECRET) ----
+@app.route("/api/calendar/outlook/connect")
+@login_required
+def outlook_connect():
+    if not outlook_cal.configured():
+        return redirect("/settings?olerror=unconfigured")
+    state = secrets.token_urlsafe(16)
+    session["ol_state"] = state  # CSRF guard, verified on callback
+    return redirect(outlook_cal.auth_url(state))
+
+
+@app.route("/api/calendar/outlook/callback")
+@login_required
+def outlook_callback():
+    expected = session.pop("ol_state", None)
+    if request.args.get("error") or not request.args.get("code"):
+        return redirect("/settings?olerror=denied")
+    if not expected or request.args.get("state") != expected:
+        return redirect("/settings?olerror=state")
+    try:
+        outlook_cal.connect_with_code(current_business()["id"], request.args["code"])
+    except Exception as e:
+        print(f"[firstback] outlook connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?olerror=exchange")
+    return redirect("/settings?olconnected=1")
+
+
+@app.route("/api/calendar/outlook/disconnect", methods=["POST"])
+@login_required
+def outlook_disconnect():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    outlook_cal.disconnect(current_business()["id"])
     return jsonify(connected=False)
 
 
@@ -2232,6 +2359,10 @@ def api_cancel_appointment(appt_id):
     google_event_id = appt.get("google_event_id")
     if google_event_id and google_cal.is_connected(biz["id"]):
         google_cal.cancel_event_async(biz["id"], google_event_id)
+    # Plan 14: cancel the Outlook Calendar event if one was created.
+    outlook_event_id = appt.get("outlook_event_id")
+    if outlook_event_id and outlook_cal.is_connected(biz["id"]):
+        outlook_cal.cancel_event_async(biz["id"], outlook_event_id)
     when = fmt_slot_when(appt.get("day"), appt.get("slot_time")) or appt.get("scheduled_for") or "your estimate"
     lead = db.get_lead(appt["lead_id"], biz["id"])
     if lead and (lead.get("phone") or "").strip():
@@ -2259,6 +2390,8 @@ def api_contacts():
 def api_contacts_add():
     """Tag a number so FirstBack never cold-texts it. Only the owner-set categories
     are accepted (customer/prospect are learned automatically, never set by hand)."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     data, err = _get_json("number", "category")
     if err:
         return err
@@ -2274,6 +2407,8 @@ def api_contacts_add():
 @app.route("/api/contacts/delete", methods=["POST"])
 @login_required
 def api_contacts_delete():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     data, err = _get_json("number")
     if err:
         return err
@@ -2427,6 +2562,8 @@ def api_suggestions():
 def api_suggestion_accept(sug_id):
     """Confirm a suggestion (optionally recategorized): write it to the directory and
     mark the suggestion accepted. The owner is always the one who decides."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
     sug = db.get_suggestion(sug_id, biz["id"])
     if not sug:
@@ -2444,6 +2581,8 @@ def api_suggestion_accept(sug_id):
 @login_required
 def api_suggestion_dismiss(sug_id):
     """Dismiss a suggestion -- it won't be raised again for this number."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
     if not db.get_suggestion(sug_id, biz["id"]):
         return jsonify(error="Suggestion not found."), 404
@@ -2456,6 +2595,8 @@ def api_suggestion_dismiss(sug_id):
 def api_suggestion_reopen(sug_id):
     """Undo: move a sorted/dismissed suggestion back to 'to review'. If it had been
     accepted, the directory entry that accept created is reverted too."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
     sug = db.get_suggestion(sug_id, biz["id"])
     if not sug:
@@ -2471,6 +2612,8 @@ def api_suggestion_reopen(sug_id):
 def api_suggestions_bulk():
     """Apply one action (accept | dismiss | reopen) to many suggestions at once -- the
     bulk-select path that makes an imported address book tractable."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
     data, err = _get_json("ids", "action")
     if err:
@@ -2508,6 +2651,8 @@ def api_contacts_import():
     """Upload a vCard (.vcf) or CSV export -> parse -> pre-sort -> queue each contact
     as a PENDING suggestion in the review inbox. Nothing is screened automatically;
     the owner confirms (in bulk). Returns an import summary for the UI."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
     f = request.files.get("file")
     if not f or not (f.filename or "").strip():
@@ -2571,6 +2716,8 @@ def google_contacts_callback():
 @app.route("/api/contacts/google/sync", methods=["POST"])
 @login_required
 def google_contacts_sync():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     biz = current_business()
     if not google_contacts.is_connected(biz["id"]):
         return jsonify(error="Connect Google Contacts first."), 400
@@ -2585,8 +2732,130 @@ def google_contacts_sync():
 @app.route("/api/contacts/google/disconnect", methods=["POST"])
 @login_required
 def google_contacts_disconnect():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
     google_contacts.disconnect(current_business()["id"])
     return jsonify(connected=False)
+
+
+# ---- Plan 13: FSM / Jobber OAuth + sync routes ----
+
+@app.route("/api/fsm/jobber/connect")
+@login_required
+def fsm_jobber_connect():
+    """Start the Jobber OAuth2 flow. Redirect to the Jobber authorization page."""
+    if not jobber_fsm.configured():
+        return redirect("/settings?fsmerror=unconfigured")
+    state = secrets.token_urlsafe(16)
+    session["fsm_j_state"] = state   # CSRF guard, verified + consumed on callback
+    return redirect(jobber_fsm.auth_url(state))
+
+
+@app.route("/api/fsm/jobber/callback")
+@login_required
+def fsm_jobber_callback():
+    """Jobber OAuth2 callback: exchange the code for tokens and trigger a first sync."""
+    expected = session.pop("fsm_j_state", None)
+    if request.args.get("error") or not request.args.get("code"):
+        return redirect("/settings?fsmerror=denied")
+    if not expected or request.args.get("state") != expected:
+        return redirect("/settings?fsmerror=state")
+    try:
+        jobber_fsm.connect_with_code(current_business()["id"], request.args["code"])
+    except Exception as e:
+        print(f"[firstback] jobber connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?fsmerror=exchange")
+    # Kick off an immediate background sync now that we're connected.
+    biz_id = current_business()["id"]
+    threading.Thread(target=_fsm_background_sync, args=(biz_id,), daemon=True).start()
+    return redirect("/settings?fsmconnected=1")
+
+
+def _fsm_background_sync(business_id):
+    """Run a sync_clients pass in a daemon thread (called after connect + /api/fsm/sync)."""
+    try:
+        result = fsm_sync.sync_clients(business_id)
+        db.set_fsm_sync_stamp(business_id, datetime.now(timezone.utc).isoformat(),
+                              result.get("clients_fetched", 0))
+    except Exception as e:
+        print(f"[firstback] fsm background sync error (biz {business_id}): {e}",
+              file=sys.stderr, flush=True)
+
+
+@app.route("/api/fsm/jobber/disconnect", methods=["POST"])
+@login_required
+def fsm_jobber_disconnect():
+    """Disconnect Jobber for this business. Keeps already-synced contact suggestions."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    jobber_fsm.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
+# ---- Plan 16: FSM / Housecall Pro OAuth + sync routes ----
+
+@app.route("/api/fsm/hcp/connect")
+@login_required
+def fsm_hcp_connect():
+    """Start the Housecall Pro OAuth2 flow. Redirect to the HCP authorization page."""
+    if not hcp_fsm.configured():
+        return redirect("/settings?hcperror=unconfigured")
+    state = secrets.token_urlsafe(16)
+    session["fsm_h_state"] = state   # CSRF guard, verified + consumed on callback
+    return redirect(hcp_fsm.auth_url(state))
+
+
+@app.route("/api/fsm/hcp/callback")
+@login_required
+def fsm_hcp_callback():
+    """Housecall Pro OAuth2 callback: exchange the code for tokens and trigger a first sync."""
+    expected = session.pop("fsm_h_state", None)
+    if request.args.get("error") or not request.args.get("code"):
+        return redirect("/settings?hcperror=denied")
+    if not expected or request.args.get("state") != expected:
+        return redirect("/settings?hcperror=state")
+    try:
+        hcp_fsm.connect_with_code(current_business()["id"], request.args["code"])
+    except Exception as e:
+        print(f"[firstback] hcp connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?hcperror=exchange")
+    # Kick off an immediate background sync now that we're connected.
+    biz_id = current_business()["id"]
+    threading.Thread(target=_fsm_background_sync, args=(biz_id,), daemon=True).start()
+    return redirect("/settings?hcpconnected=1")
+
+
+@app.route("/api/fsm/hcp/disconnect", methods=["POST"])
+@login_required
+def fsm_hcp_disconnect():
+    """Disconnect Housecall Pro for this business. Keeps already-synced contact suggestions."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    hcp_fsm.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
+@app.route("/api/fsm/sync", methods=["POST"])
+@login_required
+def fsm_sync_now():
+    """Trigger an immediate FSM client sync for this business (Jobber or HCP)."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    biz = current_business()
+    # FIX-10: provider-neutral checks — works for both Jobber and HCP.
+    if not fsm_sync.configured():
+        return jsonify(error="No FSM provider is configured."), 400
+    if fsm_sync._get_active_provider(biz["id"]) is None:
+        return jsonify(error="Connect an FSM provider (Jobber or Housecall Pro) first."), 400
+    try:
+        result = fsm_sync.sync_clients(biz["id"])
+        db.set_fsm_sync_stamp(biz["id"], datetime.now(timezone.utc).isoformat(),
+                              result.get("clients_fetched", 0))
+    except Exception as e:
+        print(f"[firstback] fsm sync_now error (biz {biz['id']}): {e}",
+              file=sys.stderr, flush=True)
+        return jsonify(error="Sync failed. Please try again."), 502
+    return jsonify(ok=True, **result)
 
 
 # ---- Phase 1: usage fuel gauge ----
@@ -2795,6 +3064,88 @@ def _missed_call_textback(biz, caller, call_sid="", dial_status=""):
     return False   # repeat call on an existing thread: no NEW text went out this call
 
 
+def _connect_inbound_to_ai(biz, caller, call_sid, verdict=None):
+    """Plan 17: attempt to connect an inbound missed call to the AI ConversationRelay.
+
+    Gates (any fail -> return None -> caller falls through to _missed_call_textback):
+      1. VOICE_PUBLIC_URL is set (voice service deployed).
+      2. biz.inbound_voice_enabled == 1 (per-business opt-in; default 0/off).
+      3. Monthly voice spend is under config.VOICE_MONTHLY_CAP_CENTS.
+      4. FIX-3: uses the passed-in screening verdict (do NOT re-screen here).
+         If the caller is confirmed spam in enforce mode, bail.
+      Q3: health-probe GET VOICE_PUBLIC_URL with a tight 400ms timeout; on
+         ConnectionError or Timeout returns None (caller gets text-back, no dead air).
+
+    On success: logs the call (FIX-2), opens a voice_calls row, builds the
+    /twiml URL (FIX-5: quote() on name AND greeting), and returns a <Redirect>
+    TwiML that sends Twilio to the voice service's /twiml endpoint, which returns
+    ConversationRelay TwiML (reusing build_twiml with the custom inbound greeting).
+    Inbound greeting is AI-disclosed with no recording claim (FIX-6).
+    """
+    import requests as _req
+    biz_id = biz["id"]
+
+    # Gate 1: voice service must be deployed.
+    if not VOICE_PUBLIC_URL:
+        return None
+    # Gate 2: per-business inbound AI answering must be enabled (default 0 = inert).
+    if not biz.get("inbound_voice_enabled"):
+        return None
+    # Gate 3: monthly cap.
+    if db.voice_spend_this_month(biz_id) >= config.VOICE_MONTHLY_CAP_CENTS:
+        return None
+    # Gate 4 (FIX-3): use the pre-computed verdict; don't re-screen (would charge again).
+    if verdict is not None:
+        mode = _effective_screen_mode(biz)
+        if not verdict.get("engage") and mode == "enforce":
+            return None
+
+    # Q3 health probe: a tight preflight so we never hand the caller dead air when the
+    # voice service is down. ConnectionError or Timeout -> fall through to text-back.
+    try:
+        _req.get(VOICE_PUBLIC_URL, timeout=0.4)
+    except Exception:
+        return None
+
+    # Find or create the lead.
+    lead = db.get_lead_by_phone(biz_id, caller)
+    if not lead:
+        lead = db.get_lead(db.create_lead(biz_id, "New Caller", caller))
+    lead_id = lead["id"]
+
+    # FIX-2: log the call so it appears in the call log + screening stats.
+    biz_twilio_number = biz.get("twilio_number") or ""
+    db.log_call(biz_id, call_sid, from_number=caller, to_number=biz_twilio_number,
+                dial_status="ai-answered", missed=0, lead_id=lead_id, engaged=1)
+    # Open the voice_calls metering row (closed by /webhooks/twilio/voice/status).
+    db.insert_voice_call(biz_id, lead_id, call_sid)
+
+    # FIX-6: inbound greeting -- AI disclosed, no recording claim.
+    biz_name = biz.get("name") or "us"
+    inbound_greeting = (
+        f"Hi, you've reached {biz_name}. I'm an AI scheduling assistant"
+        " -- I can get you booked for a free estimate right now."
+        " What can we help you with?"
+    )
+
+    # FIX-5: URL-encode name AND greeting so special chars don't break the query string.
+    # Twilio will GET this URL and execute the returned ConversationRelay TwiML (reusing
+    # voice_service.build_twiml with greeting= so the inbound greeting is used).
+    twiml_url = (
+        VOICE_PUBLIC_URL.rstrip("/") + "/twiml"
+        + "?biz=" + quote(str(biz_id))
+        + "&lead=" + quote(str(lead_id))
+        + "&name=" + quote(biz_name)
+        + "&greeting=" + quote(inbound_greeting)
+    )
+    # Return a <Redirect> so Twilio fetches the voice service's /twiml endpoint and
+    # executes the ConversationRelay TwiML it returns. This is the same mechanism used
+    # by the outbound callback path (place_call uses twiml_url the same way).
+    return _twiml(
+        f'<Response><Redirect method="GET">{_xesc(twiml_url)}</Redirect></Response>'
+    )
+
+
 @app.route("/webhooks/twilio/voice/inbound", methods=["POST"])
 @require_twilio_signature
 def twilio_voice_inbound():
@@ -2821,8 +3172,16 @@ def twilio_voice_inbound():
         return _twiml(
             f'<Response><Dial answerOnBridge="true" timeout="18" action="{action}" '
             f'method="POST"><Number>{_xesc(forward)}</Number></Dial></Response>')
-    engaged = _missed_call_textback(biz, request.form.get("From", ""),
-                                    call_sid, "no-forward")
+    # Hook B (plan 17): no forward_to set — try AI answering before text-back.
+    # Sentinel is already handled above (returns Hangup); sentinel never reaches here.
+    _hb_caller = request.form.get("From", "")
+    _hb_verdict = (_screen_missed_caller(biz, _hb_caller)
+                   if _effective_screen_mode(biz) != "off" else None)
+    _hb_ai = _connect_inbound_to_ai(biz, _hb_caller, call_sid, _hb_verdict)
+    if _hb_ai is not None:
+        return _hb_ai
+    # AI answering off/gated/failed — fall through to existing text-back.
+    engaged = _missed_call_textback(biz, _hb_caller, call_sid, "no-forward")
     if engaged:
         return _twiml("<Response><Say>Sorry we missed you. We just sent you a text "
                       "message. Goodbye.</Say><Hangup/></Response>")
@@ -2839,8 +3198,21 @@ def twilio_voice_dial_status():
     biz = db.get_business_by_twilio_number(request.form.get("To", ""))
     status = (request.form.get("DialCallStatus") or "").lower()
     if biz and status in _MISSED_DIAL:
-        engaged = _missed_call_textback(biz, request.form.get("From", ""),
-                                        request.form.get("CallSid", ""), status)
+        _from = request.form.get("From", "")
+        _csid = request.form.get("CallSid", "")
+        # Hook A (plan 17, FIX-1): only when the caller is still on the line.
+        # 'canceled' means the caller hung up before we answered — do NOT open a
+        # ConversationRelay session for a dead line; fall straight to text-back.
+        if status != "canceled":
+            _verdict = _screen_missed_caller(biz, _from) if _effective_screen_mode(biz) != "off" else None
+            _ai_twiml = _connect_inbound_to_ai(biz, _from, _csid, _verdict)
+            if _ai_twiml is not None:
+                return _ai_twiml
+        # If AI answering is off/gated/failed (or status==canceled), fall through to text-back.
+        # _missed_call_textback re-screens internally; no double-screening risk here because
+        # either we never screened (canceled / gate failed before verdict) or the verdict
+        # was computed but the helper returned None (spam/cap) so text-back handles it fresh.
+        engaged = _missed_call_textback(biz, _from, _csid, status)
         if engaged:
             # 10-1: opt-in voicemail capture. Offer the caller (single-party, standard
             # voicemail -- NOT a recorded live conversation) to leave a message that
@@ -3046,7 +3418,11 @@ def twilio_sms_inbound():
     # when a voice service is deployed. The FCC treats AI voice as a robocall, so we
     # record the opt-in and only call AFTER the customer asks. If voice is off, fall
     # through and just answer by text.
-    if norm in _CALL_WORDS and VOICE_PUBLIC_URL:
+    # Also honor the per-tenant voice_callback_enabled toggle (saved in Settings).
+    # Default to ON (1) when the column is absent/None so an existing single tenant
+    # is never silently disabled by a missing explicit toggle value.
+    _voice_toggle_on = biz.get("voice_callback_enabled", 1) not in (0, False)
+    if norm in _CALL_WORDS and VOICE_PUBLIC_URL and _voice_toggle_on:
         db.set_voice_consent(biz["id"], caller, True)
         # R2 pre-call guard (ordered -- any fail -> text reply, never call).
         # (i) Re-read consent after writing: concurrent STOP could have cleared voice_ok.

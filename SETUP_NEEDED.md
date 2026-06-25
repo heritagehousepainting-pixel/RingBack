@@ -1,5 +1,10 @@
 # Setup Needed — to make every claim fully live & true
 
+> **Current repo note @ 2026-06-23:** this file contains a chronological ops ledger. Some older
+> sections were written while work lived on `staging`; the current cleanup sweep started from
+> `main` at `8163f56` with 76 root-level `test_*.py` scripts. Treat branch/test-count/deploy claims
+> below as historical unless re-verified against the live checkout and Render.
+
 The site truth-audit (see `SITE_TRUTH_AUDIT.md`) made the copy honest about what's live
 vs. gated. This is the list of things **you** must do to turn the honest-but-gated /
 beta / placeholder states into fully live ones. Integration credential steps live in
@@ -25,7 +30,8 @@ Full spec + the rest of the build order: `~/apps/COO/firstback-blueprint/phase0/
 ## Autonomy Blueprint — Phase 1 (2026-06-18) — OWNER OPS to flip it live
 Phase 1 CODE is built + merged on `staging` (Stripe billing + subscription gating; auth password-reset + SECRET_KEY/seed hardening + login rate-limit; LLM cost spine = Sonnet/Haiku + prompt caching + token ledger + per-tenant dollar cap; usage "conversations" fuel gauge; SF-6 quiet-hours backstop + START re-opt-in). 28/28 test files green; billing/auth security spot-check passed. Owner ops to flip live:
 - **Stripe account (test mode first):** set `STRIPE_SECRET_KEY=sk_test_…`, `STRIPE_WEBHOOK_SECRET=whsec_…`, and create **6 Price IDs** — monthly `STRIPE_PRICE_{STARTER,PRO,CREW}` ($99/$199/$399 /mo) **+ annual (20% off, billed yearly) `STRIPE_PRICE_{STARTER,PRO,CREW}_ANNUAL` ($950 / $1,910 / $3,830 per year)** — and wire them in. (Code is built + tested against mocked Stripe; nothing hits Stripe until these are set.) Note: annual subscribers still get the SAME monthly conversation allotment — the fuel gauge refills every calendar month regardless of billing interval.
-- **Set `CLAUDE_DAILY_COST_CAP_USD`** if you want a per-tenant daily AI spend cap other than the $1.00 default.
+- **Set `FIRSTBACK_DAILY_COST_CAP`** if you want a per-tenant daily AI spend cap other than the
+  current $5.00 default in `config.py`.
 - **`be-audit` before any production deploy** of the `/webhooks/stripe` + `/auth/reset` paths (money/security gate). Minor P2: wrap `get_llm_spend_today` to fail-open.
 - Phase-0 ops above still pending (Render env, cron, Resend, voice decision).
 
@@ -380,9 +386,10 @@ launch-blockers in code (commit cbfa24d). Remaining items that are NOT code:
 
 ## Autonomous build C–G (this session) — owner items to go live
 
-The batches C/D/E/F/G shipped to **`staging` only** (13 commits, 76/76 tests green, 4 ship-gate
-audit lanes passed). **Production (`main`) is untouched at `92aacde`.** Everything new is
-**inert/opt-in by default** — nothing changes for the live Heritage tenant until you act.
+Historical note: the batches C/D/E/F/G originally shipped to **`staging` only** (13 commits, 76/76
+tests green, 4 ship-gate audit lanes passed). The current repo may already be on `main`; verify with
+`git status --short --branch` before treating this section as an active gate. Everything new was
+designed to be **inert/opt-in by default** until explicitly enabled.
 
 ### The one hard gate
 - **Promote `staging` → `main`.** Held all session by design. Review the staging deploy on the
@@ -397,14 +404,69 @@ audit lanes passed). **Production (`main`) is untouched at `92aacde`.** Everythi
 - **Google review tracking** (Batch E): set `GOOGLE_PLACES_API_KEY` (already used for setup
   autocomplete). Inert/no-op without it.
 
-### Founder decisions (gate copy/policy I deliberately did NOT ship)
-- 30-day **money-back guarantee** badge (real refund commitment).
-- Lead the hero with **"it books the job" + the Vic briefing** framing (briefing is login-gated;
-  hero claim would overclaim until it's a public feature).
-- Bundle **paid caller-reputation** (Nomorobo/Hiya) into a paid tier — set
-  `FIRSTBACK_REPUTATION_PROVIDER`; has a real cost + pricing implication.
-- **Soft-overage billing** (charge per extra reply) vs the hard cap (the FAQ ships the soft
-  "we'll alert you" version only — no $0.75 promise until billing is wired).
+### Founder decisions (gate copy/policy I deliberately did NOT ship) — RESOLVED 2026-06-23
+- 30-day **money-back guarantee** badge — **NO** (owner: don't want to attract refund-seekers /
+  sign-ups gaming the guarantee). Not shipped.
+- Lead the hero with **"it books the job" + the Vic briefing** — **DONE.** Added a "morning
+  briefing" section below the homepage hero (`templates/onboarding.html` → `.ob-after` /
+  `.ob-brief*`, styles in `static/onboarding.css`): kicker "While you were on the ladder", H2
+  "You wake up to a plan, not a pile.", a static mock of the real dashboard briefing card
+  (`assistant.py:briefing`). On `staging`, awaiting owner OK to promote.
+- Bundle **paid caller-reputation** (Nomorobo/Hiya) into a paid tier — **GO but DEFERRED.**
+  Wait until `/pricing` is live, then ship the provider (`FIRSTBACK_REPUTATION_PROVIDER`) +
+  paid-tier copy together (no per-lookup cost until a paid tier captures it).
+- **Soft-overage billing** vs hard cap — **HOLD** (owner deferred). Keep the shipped soft
+  "we'll alert you" FAQ wording; no $0.75/extra-reply promise until billing is wired.
+
+### New integrations built 2026-06-23 (gated/inert — owner creds to flip live)
+Both shipped on `staging` via the autonomous build loop (`product-review/BUILD-LOOP-P2-P6.md`,
+plans 13/14). Inert no-ops until the env vars are set — nothing fires without them.
+- **Jobber FSM sync (P2, read-only v1)** — recommended over Housecall Pro; **owner: confirm
+  Jobber vs HCP** before going live (provider abstraction `fsm_provider.py` lets HCP swap in later).
+  To flip live: create a Jobber Developer app (scopes `read_clients`, `read_jobs`,
+  `write_quote_requests` — needs **Jobber Connect tier or higher**), then set Render env
+  `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_REDIRECT_URI` (+ optional `FSM_SYNC_INTERVAL_HOURS`,
+  default 24). Then **Settings → Connect Jobber** → OAuth → synced clients land as contact
+  *suggestions* to review (Bulk Accept available); accepted clients feed call screening so the AI
+  never cold-texts an existing customer. Booked estimates push back as Jobber quote-requests.
+- **Housecall Pro FSM sync (2nd provider)** — alternative to Jobber, same read-only v1 (synced customers
+  feed call screening). Set Render env `HCP_CLIENT_ID`, `HCP_CLIENT_SECRET`, `HCP_REDIRECT_URI`, then
+  **Settings → Connect Housecall Pro**. Provider selection is automatic (whichever you connect; if both
+  Jobber + HCP are ever connected, HCP wins and Jobber pauses — connect only one). Caveats: confirm the
+  exact OAuth **scope strings** in the HCP developer dashboard at app registration (not publicly documented);
+  the booked-estimate **push-back is a no-op in v1** (HCP has no confirmed public customer-notes API) — the
+  value is the inbound customer sync.
+- **Outlook / Microsoft 365 calendar (P6)** — second calendar provider alongside Google; both can be
+  connected at once. To flip live: register an Azure AD app (delegated `Calendars.ReadWrite` +
+  `offline_access`, account types "any org + personal"), then set Render env `MICROSOFT_CLIENT_ID`,
+  `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI` (+ optional `MICROSOFT_TENANT_ID`, default
+  "common"). Then **Settings → Connect Outlook**. Note: personal MS accounts expire refresh tokens
+  (24h inactivity / 90d) → the card shows "Reconnect Outlook" if that happens.
+
+### Voice (P1) — DONE-PENDING-DEPLOY (caller-requested AI voice callback)
+Built + tested (187 voice/dispatcher tests green); inert until the separate voice service is deployed.
+Caller texts **CALL** → the AI phones them back (Twilio ConversationRelay), books by voice, quiet-hours
++ consent gated. Code gaps closed 2026-06-23 (dispatcher TwiML URL bug; `httpx` pin; per-tenant toggle
+honored; marketing copy auto-flips on deploy). See `product-review/plans/15-voice-golive.md`. To go live:
+1. Complete the `firstback-voice` service block in `render.yaml` (uvicorn `voice_service:fastapi_app`,
+   ~$7/mo). Env: `FIRSTBACK_WEB_URL` (Flask app URL), `FIRSTBACK_INTERNAL_SECRET` (**same value on BOTH
+   services**), optional `FIRSTBACK_VOICE_TTS`, `FIRSTBACK_PROVIDER=claude`. (No Anthropic key needed on the
+   voice svc — it relays to the web app.)
+2. Deploy it; set `FIRSTBACK_VOICE_URL=<its url>` on the web service (master switch — flips `voice_configured`,
+   activates the CALL path + all guards, auto-flips the marketing copy to "live").
+3. Confirm `FIRSTBACK_PUBLIC_URL` set on web (AMD StatusCallback + the dispatcher TwiML base). ConversationRelay needs no Twilio add-on.
+4. **Flip voice ON for the live tenant:** the `voice_callback_enabled` column defaults to 0, so save Settings
+   with the "reply CALL" toggle ON (or `UPDATE businesses SET voice_callback_enabled=1 WHERE id=1`).
+4b. **Live INBOUND AI answering (new, Plan 17)** — the AI answers an incoming call live and books, distinct
+   from the "reply CALL" callback. Same prerequisite (`FIRSTBACK_VOICE_URL` set). Turn on per-business via the
+   new Settings toggle ("Answer inbound calls with AI…") = `inbound_voice_enabled` (defaults 0). Model:
+   fallback (ring your cell 18s → AI answers on no-answer); **always-AI** = leave `forward_to` blank + toggle on.
+   Inert until both the voice service is deployed AND the toggle is on; has a health-probe so callers never hear
+   dead air if the service is down (falls back to text). OWNER decisions before real-customer use: (a) recording
+   disclosure — greeting currently makes NO recording claim (transcript relay); add one only if you enable audio
+   recording; (b) **attorney review** of AI-voice (inbound ≈ IVR, lower TCPA risk than outbound, but confirm).
+5. Cost: ~$0.10–0.13/min (3-min call ≈ $0.30); default cap $20/biz/mo (`FIRSTBACK_VOICE_MONTHLY_CAP_CENTS`).
+   Per DEV-HANDOFF: price voice as a $29–$49/mo opt-in add-on once pricing/billing is live.
 
 ### Still NEEDS-OWNER (not built — external credentials)
 - **Deposit link at booking** (plan 10-3): owner creates a Stripe **Payment Link**, pastes the URL.

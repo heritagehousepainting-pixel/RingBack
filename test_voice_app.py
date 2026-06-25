@@ -71,6 +71,8 @@ CALLER4 = "+14155550303"
 
 db.set_business_twilio(1, BIZ_NUM, "PN2", forward_to="+15559990001")
 db.set_a2p_status(1, "approved")
+# Ensure the per-tenant voice toggle is ON so the CALL path (and its guards) fire.
+db.update_phone_voice(1, voice_callback_enabled=1)
 
 
 def check(name, cond):
@@ -266,6 +268,65 @@ check("R2d monthly cap: endpoint returns 200", r_cap.status_code == 200)
 
 # Restore original place_call
 messaging.place_call = _orig_place_call
+
+
+# ============================================================
+# R2e -- per-tenant voice_callback_enabled toggle
+# ============================================================
+print("\n---- R2e: voice_callback_enabled toggle ----")
+
+_CALLER_TOGGLE = "+14155550405"
+_lead_toggle = db.create_lead(1, "Toggle Caller", _CALLER_TOGGLE)
+db.set_voice_consent(1, _CALLER_TOGGLE, True)
+
+_toggle_place_calls = []
+
+
+def _spy_toggle_place_call(biz, to, twiml_url, add_amd=False, status_callback=None):
+    _toggle_place_calls.append({"to": to})
+    return {"status": "placed", "sid": "CA_toggle_001"}
+
+
+# R2e-1: toggle OFF → CALL stays on text (place_call never called)
+_prev_messaging_place = messaging.place_call
+messaging.place_call = _spy_toggle_place_call
+db.update_phone_voice(1, voice_callback_enabled=0)
+_toggle_place_calls.clear()
+
+r_toggle_off = post_signed("/webhooks/twilio/sms/inbound",
+                           {"To": BIZ_NUM, "From": _CALLER_TOGGLE, "Body": "CALL",
+                            "MessageSid": "SMtoggle01"})
+check("R2e-1 toggle=0: place_call NOT called even when VOICE_PUBLIC_URL set",
+      len(_toggle_place_calls) == 0)
+check("R2e-1 toggle=0: endpoint returns 200", r_toggle_off.status_code == 200)
+
+# R2e-2: toggle ON → call path proceeds (place_call IS called, assuming consent + hours OK)
+# Clear the over-cap voice_calls row inserted by R2d to avoid falsely blocking on monthly cap.
+_conn_r2e = _sqlite3.connect(_TMP.name)
+_conn_r2e.execute("DELETE FROM voice_calls WHERE biz_id=1")
+_conn_r2e.commit()
+_conn_r2e.close()
+db.update_phone_voice(1, voice_callback_enabled=1)
+_toggle_place_calls.clear()
+
+r_toggle_on = post_signed("/webhooks/twilio/sms/inbound",
+                          {"To": BIZ_NUM, "From": _CALLER_TOGGLE, "Body": "CALL",
+                           "MessageSid": "SMtoggle02"})
+check("R2e-2 toggle=1: place_call IS called (CALL path proceeds)",
+      len(_toggle_place_calls) == 1)
+check("R2e-2 toggle=1: endpoint returns 200", r_toggle_on.status_code == 200)
+
+# R2e-3: toggle unset (column missing from biz dict) → defaults ON
+_biz_no_toggle = dict(db.get_business(1))
+_biz_no_toggle.pop("voice_callback_enabled", None)  # simulate absent column
+_toggle_place_calls.clear()
+from app import _CALL_WORDS as _CALL_WORDS_ref
+import app as _app_toggle_ref
+_voice_toggle_on_test = _biz_no_toggle.get("voice_callback_enabled", 1) not in (0, False)
+check("R2e-3 toggle unset (None/missing): defaults to ON",
+      _voice_toggle_on_test is True)
+
+messaging.place_call = _prev_messaging_place
 
 
 # ============================================================

@@ -338,5 +338,81 @@ with _app.app.test_request_context(f"/twiml/dispatcher/{lead_id}", method="POST"
           _app._dispatcher_lead_owned(lead_id) is not None)
 
 
+# ===========================================================================
+# 13. Bug-1 regression: dispatcher TwiML URL uses the FLASK base, NOT the
+#     voice-service URL — these differ in split-service prod.
+#
+#     The existing tests (7-11) mask the bug because FIRSTBACK_PUBLIC_URL
+#     and FIRSTBACK_VOICE_PUBLIC_URL are set to the same host at module init.
+#     This test sets them to DIFFERENT values and asserts the TwiML URL that
+#     reaches messaging.place_call is built from the FLASK public base, not
+#     from VOICE_PUBLIC_URL.
+# ===========================================================================
+_split_call_log = []
+
+
+def _fake_place_call_split(biz, to, twiml_url, status_callback=None):
+    _split_call_log.append(twiml_url)
+    return {"status": "placed", "sid": "CA_split_001"}
+
+
+_FLASK_BASE = "https://firstback-web.onrender.com"    # Flask app origin
+_VOICE_SVC  = "https://firstback-voice.onrender.com"  # separate voice service
+
+import config as _cfg2
+import app as _app2  # same module, just a convenience alias
+
+_prev_pub = os.environ.get("FIRSTBACK_PUBLIC_URL", "")
+_prev_voice = os.environ.get("FIRSTBACK_VOICE_URL", "")
+
+# Point PUBLIC_URL at the Flask base and VOICE_URL at a DIFFERENT service.
+_cfg2.PUBLIC_BASE_URL = _FLASK_BASE
+_cfg2.VOICE_PUBLIC_URL = _VOICE_SVC
+_app2.VOICE_PUBLIC_URL = _VOICE_SVC
+
+# Stub urgency detection and reply generation to force the dispatcher path.
+_orig_detect2 = _ai_mod.detect_urgency
+_orig_reply2  = _ai_mod.generate_reply
+_ai_mod.detect_urgency = lambda body: True
+_ai_mod.generate_reply = lambda biz, history, **kw: ("On our way.", None)
+
+_prev_place_call = messaging.place_call
+messaging.place_call = _fake_place_call_split
+_split_call_log.clear()
+
+_lead_split = db.create_lead(1, "Split Caller", "+15550001111")
+_last_inbound_store[_lead_split] = "Urgent split test"
+_lead_row_split = db.get_lead(_lead_split)
+_biz_split = dict(db.get_business(1))
+_biz_split["alert_sms"] = "+15559990002"
+
+from app import handle_inbound as _handle_split
+_handle_split(_biz_split, _lead_row_split, "Urgent split test")
+
+check("split-service: dispatcher place_call was attempted (VOICE_PUBLIC_URL set)",
+      len(_split_call_log) == 1)
+
+if _split_call_log:
+    _recorded_url = _split_call_log[0]
+    check("split-service: TwiML URL is on Flask base (not voice-service host)",
+          _recorded_url.startswith(_FLASK_BASE))
+    check("split-service: TwiML URL is NOT on voice-service host",
+          not _recorded_url.startswith(_VOICE_SVC))
+    check("split-service: TwiML URL points to /twiml/dispatcher/<id>",
+          f"/twiml/dispatcher/{_lead_split}" in _recorded_url)
+else:
+    check("split-service: TwiML URL on Flask base (skipped — call not placed)", False)
+    check("split-service: TwiML URL not on voice-service (skipped)", False)
+    check("split-service: /twiml/dispatcher/<id> in URL (skipped)", False)
+
+# Restore
+_cfg2.PUBLIC_BASE_URL = _prev_pub
+_cfg2.VOICE_PUBLIC_URL = _prev_voice
+_app2.VOICE_PUBLIC_URL = _prev_voice
+_ai_mod.detect_urgency = _orig_detect2
+_ai_mod.generate_reply = _orig_reply2
+messaging.place_call = _prev_place_call
+
+
 print(f"==== {_pass} passed, {_fail} failed ====")
 sys.exit(1 if _fail else 0)

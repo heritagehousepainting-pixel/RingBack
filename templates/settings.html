@@ -27,6 +27,7 @@
 
 {% block content %}
 <form method="post" class="settings-col">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   {% call card(title='Business profile', subtitle='The basics your AI uses to sound like you.') %}
     <div class="field-grid">
       {{ field('Business name', name='name', value=business.name) }}
@@ -43,19 +44,24 @@
     <div class="field-grid">
       {{ field('Ring my cell first (optional)', name='forward_to', value=business.forward_to or '', type='tel', placeholder='+1 555 123 4567', help='An inbound call rings this number first. If you don’t pick up, FirstBack takes over and texts the caller back.') }}
     </div>
-    <div class="toggle-list">
+    <div class=”toggle-list”>
       {{ alert_toggle('voice_callback_enabled', 'Let a caller reply “CALL” to get an AI phone callback', business.voice_callback_enabled) }}
+      {% if voice_configured and sms_configured %}
+      {{ alert_toggle('inbound_voice_enabled', 'Answer inbound calls with AI when you don\'t pick up -- the caller is told they\'re speaking with an AI assistant for ' ~ (business.name or 'your business') ~ '.', business.inbound_voice_enabled) }}
+      {% endif %}
     </div>
     {% if voice_configured and sms_configured %}
-    <p class="provider-note provider-note-ok">Voice callback is <strong>live</strong>. When a caller replies CALL, FirstBack phones them, talks through the job, and books the estimate — within quiet hours only.</p>
+    <p class=”provider-note provider-note-ok”>Voice callback is <strong>live</strong>. When a caller replies CALL, FirstBack phones them, talks through the job, and books the estimate -- within quiet hours only.</p>
     {% else %}
-    <p class="provider-note provider-note-soft">The AI voice callback goes live once you connect <strong>Twilio</strong> and deploy the voice service. Until then, a caller who replies CALL simply keeps chatting by <strong>text</strong> — nothing breaks.</p>
+    <p class=”provider-note provider-note-soft”>The AI voice callback goes live once you connect <strong>Twilio</strong> and deploy the voice service. Until then, a caller who replies CALL simply keeps chatting by <strong>text</strong> -- nothing breaks.</p>
     {% endif %}
   {% endcall %}
 
   {% call card(anchor='set-calendar', title='Connect your calendar', subtitle='Link Google Calendar so booked estimates show up there automatically and the AI never offers a time you’re already busy.') %}
     {% if gconnected %}<p class="provider-note provider-note-ok">Google Calendar is connected. New estimates sync to it, and your busy times are kept open-free.</p>{% endif %}
     {% if gerror %}<p class="provider-note provider-note-err">{{ 'Add your Google credentials to enable this.' if gerror == 'unconfigured' else 'We couldn’t finish connecting Google. Please try again.' }}</p>{% endif %}
+    {% if olconnected %}<p class="provider-note provider-note-ok">Outlook Calendar is connected. New estimates sync to it, and your busy times are kept open-free.</p>{% endif %}
+    {% if olerror %}<p class="provider-note provider-note-err">{{ 'Add your Microsoft credentials to enable this.' if olerror == 'unconfigured' else ('If you were disconnected, reconnect below to restore the Outlook sync.' if olerror == 'exchange' else 'We couldn’t finish connecting Outlook. Please try again.') }}</p>{% endif %}
     <div class="provider-grid">
       <div class="provider-card{{ ' is-connected' if google_connected else '' }}" data-provider="google">
         <span class="provider-logo provider-logo-google">{{ provider_logo('google') }}</span>
@@ -71,7 +77,35 @@
           <button type="button" class="btn btn-secondary btn-sm provider-btn" disabled title="Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable">Coming soon</button>
         {% endif %}
       </div>
-      {% for p in [{'key':'outlook','name':'Outlook'}, {'key':'apple','name':'Apple iCloud'}, {'key':'yahoo','name':'Yahoo'}] %}
+      {# Outlook Calendar — live card when configured, placeholder otherwise #}
+      {% if outlook_configured %}
+      <div class="provider-card{{ ' is-connected' if outlook_connected else '' }}" data-provider="outlook">
+        <span class="provider-logo provider-logo-outlook">{{ provider_logo('outlook') }}</span>
+        <span class="provider-meta">
+          <span class="provider-name">Outlook Calendar</span>
+          <span class="provider-status">
+            {%- if outlook_connected -%}Connected
+            {%- elif olerror == 'exchange' -%}Reconnect needed
+            {%- else -%}Outlook / Microsoft 365{%- endif -%}
+          </span>
+        </span>
+        {% if outlook_connected %}
+          <button type="button" class="btn btn-secondary btn-sm provider-btn" id="outlook-disconnect">Disconnect</button>
+        {% else %}
+          <a class="btn btn-primary btn-sm provider-btn" href="/api/calendar/outlook/connect">{{ 'Reconnect' if olerror == 'exchange' else 'Connect' }}</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="provider-card is-soon" data-provider="outlook">
+        <span class="provider-logo provider-logo-outlook">{{ provider_logo('outlook') }}</span>
+        <span class="provider-meta">
+          <span class="provider-name">Outlook Calendar</span>
+          <span class="provider-status">Contact us to enable, or sign in with Google</span>
+        </span>
+        <button type="button" class="btn btn-secondary btn-sm provider-btn" disabled title="Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET to enable">Coming soon</button>
+      </div>
+      {% endif %}
+      {% for p in [{'key':'apple','name':'Apple iCloud'}, {'key':'yahoo','name':'Yahoo'}] %}
       <div class="provider-card is-soon" data-provider="{{ p.key }}">
         <span class="provider-logo provider-logo-{{ p.key }}">{{ provider_logo(p.key) }}</span>
         <span class="provider-meta">
@@ -83,6 +117,145 @@
       {% endfor %}
     </div>
   {% endcall %}
+
+
+  {% call card(anchor='set-jobber', title='Connect Jobber', subtitle='Import your existing Jobber clients so the AI recognizes returning customers and never treats them as cold leads. Requires Jobber Connect or higher.') %}
+    {% if fsmconnected %}<p class="provider-note provider-note-ok">Jobber connected. Importing your existing clients&hellip; <a href="/callers">Review suggestions</a></p>{% endif %}
+    {% if fsmerror %}<p class="provider-note provider-note-err">{% if fsmerror == 'unconfigured' %}Set JOBBER_CLIENT_ID and JOBBER_CLIENT_SECRET to enable.{% else %}We couldn’t finish connecting Jobber. Please try again.{% endif %}</p>{% endif %}
+    {% if jobber_configured %}
+      <div class="provider-grid">
+        <div class="provider-card{{ ' is-connected' if jobber_connected else '' }}" data-provider="jobber">
+          <span class="provider-logo" style="font-size:1.2rem;font-weight:700;color:var(--accent)">J</span>
+          <span class="provider-meta">
+            <span class="provider-name">Jobber</span>
+            <span class="provider-status">
+              {% if jobber_connected %}
+                Connected{% if fsm_clients_synced %} &mdash; {{ fsm_clients_synced }} client{{ 's' if fsm_clients_synced != 1 else '' }} synced{% endif %}
+              {% else %}
+                Not connected
+              {% endif %}
+            </span>
+          </span>
+          {% if jobber_connected %}
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="jobber-sync-btn">Sync now</button>
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="jobber-disconnect-btn" style="margin-left:0.5rem">Disconnect</button>
+          {% else %}
+            <a class="btn btn-primary btn-sm provider-btn" href="/api/fsm/jobber/connect">Connect</a>
+          {% endif %}
+        </div>
+      </div>
+      {% if jobber_connected %}
+        <p style="margin-top:var(--space-3);font-size:0.88rem;color:var(--text-muted)">
+          Synced clients appear as suggestions for you to confirm.
+          <a href="/api/suggestions/bulk">Bulk accept</a> to recognize them all at once.
+          {% if fsm_last_synced_at %} Last synced: {{ fsm_last_synced_at[:10] }}.{% endif %}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="provider-note provider-note-soft">Jobber sync coming soon &mdash; contact us to enable.</p>
+    {% endif %}
+  {% endcall %}
+
+
+  {% call card(anchor='set-hcp', title='Connect Housecall Pro', subtitle='Sync your existing Housecall Pro customers so the AI recognizes returning clients and never treats them as cold leads.') %}
+    {% if hcpconnected %}<p class="provider-note provider-note-ok">Housecall Pro connected. Syncing your existing customers&hellip; <a href="/callers">Review suggestions</a></p>{% endif %}
+    {% if hcperror %}<p class="provider-note provider-note-err">{% if hcperror == 'unconfigured' %}Set HCP_CLIENT_ID and HCP_CLIENT_SECRET to enable.{% else %}We couldn't finish connecting Housecall Pro. Please try again.{% endif %}</p>{% endif %}
+    {% if hcp_configured %}
+      <div class="provider-grid">
+        <div class="provider-card{{ ' is-connected' if hcp_connected else '' }}" data-provider="housecall_pro">
+          <span class="provider-logo" style="font-size:1.2rem;font-weight:700;color:var(--accent)">H</span>
+          <span class="provider-meta">
+            <span class="provider-name">Housecall Pro</span>
+            <span class="provider-status">
+              {% if hcp_connected %}
+                Connected{% if fsm_clients_synced and hcp_connected %} &mdash; {{ fsm_clients_synced }} client{{ 's' if fsm_clients_synced != 1 else '' }} synced{% endif %}
+              {% else %}
+                Not connected
+              {% endif %}
+            </span>
+          </span>
+          {% if hcp_connected %}
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="hcp-sync-btn">Sync now</button>
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="hcp-disconnect-btn" style="margin-left:0.5rem">Disconnect</button>
+          {% else %}
+            <a class="btn btn-primary btn-sm provider-btn" href="/api/fsm/hcp/connect">Connect</a>
+          {% endif %}
+        </div>
+      </div>
+      {% if hcp_connected %}
+        <p style="margin-top:var(--space-3);font-size:0.88rem;color:var(--text-muted)">
+          Synced customers appear as suggestions for you to confirm.
+          <a href="/api/suggestions/bulk">Bulk accept</a> to recognize them all at once.
+          {% if fsm_last_synced_at %} Last synced: {{ fsm_last_synced_at[:10] }}.{% endif %}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="provider-note provider-note-soft">Housecall Pro sync coming soon &mdash; contact us to enable.</p>
+    {% endif %}
+  {% endcall %}
+  <script>
+  (function(){
+    var csrf = function(){ return (document.querySelector('[name=_csrf]')||{}).value || ''; };
+    var syncBtn = document.getElementById('jobber-sync-btn');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', function(){
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing…';
+        fetch('/api/fsm/sync', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(d){ syncBtn.textContent = d.ok ? 'Synced' : (d.error || 'Error'); })
+          .catch(function(){ syncBtn.textContent = 'Error'; });
+      });
+    }
+    var discBtn = document.getElementById('jobber-disconnect-btn');
+    if (discBtn) {
+      discBtn.addEventListener('click', function(){
+        if (!confirm('Disconnect Jobber? Your imported contact suggestions will remain.')) return;
+        fetch('/api/fsm/jobber/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var hcpSyncBtn = document.getElementById('hcp-sync-btn');
+    if (hcpSyncBtn) {
+      hcpSyncBtn.addEventListener('click', function(){
+        hcpSyncBtn.disabled = true;
+        hcpSyncBtn.textContent = 'Syncing…';
+        fetch('/api/fsm/sync', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(d){ hcpSyncBtn.textContent = d.ok ? 'Synced' : (d.error || 'Error'); })
+          .catch(function(){ hcpSyncBtn.textContent = 'Error'; });
+      });
+    }
+    var hcpDiscBtn = document.getElementById('hcp-disconnect-btn');
+    if (hcpDiscBtn) {
+      hcpDiscBtn.addEventListener('click', function(){
+        if (!confirm('Disconnect Housecall Pro? Your synced contact suggestions will remain.')) return;
+        fetch('/api/fsm/hcp/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var gDisc = document.getElementById('google-disconnect');
+    if (gDisc) {
+      gDisc.addEventListener('click', function(){
+        if (!confirm('Disconnect Google Calendar?')) return;
+        fetch('/api/calendar/google/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var olDisc = document.getElementById('outlook-disconnect');
+    if (olDisc) {
+      olDisc.addEventListener('click', function(){
+        if (!confirm('Disconnect Outlook Calendar?')) return;
+        fetch('/api/calendar/outlook/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+  })();
+  </script>
 
   {% call card(anchor='set-screening', title='Call screening', subtitle='Like your phone’s screen: FirstBack only texts back real prospects — it skips people you already know (they’re yours to handle) and suspected spam/robocallers. No setup, no contact import required.') %}
     {% if screen_mode == 'enforce' %}
@@ -271,6 +444,7 @@
 </form>
 
 <form method="post" action="/settings/growth_mode" class="settings-col" style="margin-top:var(--space-5)">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   {% call card(anchor='set-growth', title='Growth Autopilot', subtitle='I draft texts to past customers overnight. Pick how much you want to control.') %}
     {% if growth_saved %}<p class="provider-note provider-note-ok">Growth mode saved.</p>{% endif %}
     <div class="radio-group" style="flex-direction:column;gap:var(--space-3)">
@@ -299,6 +473,7 @@
 </form>
 
 <form method="post" action="/settings/password" class="settings-col" style="margin-top:var(--space-5)">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   {% call card(anchor='set-password', title='Password', subtitle='Change the password you use to sign in to FirstBack.') %}
     {% if pw %}<p class="provider-note provider-note-ok">Your password has been updated.</p>{% endif %}
     {% if pwerror %}<p class="provider-note provider-note-err">{{ {'current':'Your current password is incorrect.', 'short':'New password must be at least 8 characters.'}.get(pwerror, 'Could not update your password.') }}</p>{% endif %}
