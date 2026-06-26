@@ -16,6 +16,13 @@
   <meta name="twitter:title" content="FirstBack -- AI missed-call text-back for contractors">
   <meta name="twitter:description" content="Miss a call. We text back. They book.">
   {% endblock %}
+  {# Site-wide OG image, canonical URL, and structured data -- placed outside {% block meta %}
+     so pages that override the block (pricing/solutions/customers) still inherit them. #}
+  <meta property="og:url" content="{{ request.base_url }}">
+  <meta property="og:image" content="{{ request.url_root }}static/favicon-512.png">
+  <meta name="twitter:image" content="{{ request.url_root }}static/favicon-512.png">
+  <link rel="canonical" href="{{ request.base_url }}">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"FirstBack","url":"{{ request.url_root }}","logo":"{{ request.url_root }}static/favicon-512.png","description":"AI missed-call text-back that books jobs for home-services contractors."}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">

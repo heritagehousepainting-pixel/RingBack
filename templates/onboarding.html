@@ -6,14 +6,19 @@
   <title>{{ app_name }} — Every missed call, booked by AI in seconds</title>
   {# Plan 09-5: SEO/OG meta on the live homepage (onboarding.html is the served "/" page,
      not landing.html). og:image omitted until /static/og-default.png is generated. #}
-  <meta name="description" content="FirstBack texts back every missed call in seconds and books the estimate -- AI-powered for home-services contractors. Set up in one day, flat monthly rate, no per-call fees.">
+  <meta name="description" content="FirstBack texts back missed calls in seconds and books the estimate -- AI for home-services contractors. Set up in a day, flat rate, no per-call fees.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="FirstBack">
   <meta property="og:title" content="FirstBack -- Turn every missed call into a booked job">
   <meta property="og:description" content="Miss a call. We text back. They book. Set up in a day, flat monthly rate, no per-call fees.">
+  <meta property="og:url" content="{{ request.base_url }}">
+  <meta property="og:image" content="{{ request.url_root }}static/favicon-512.png">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="FirstBack -- Turn every missed call into a booked job">
   <meta name="twitter:description" content="Miss a call. We text back. They book.">
+  <meta name="twitter:image" content="{{ request.url_root }}static/favicon-512.png">
+  <link rel="canonical" href="{{ request.base_url }}">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"FirstBack","url":"{{ request.url_root }}","logo":"{{ request.url_root }}static/favicon-512.png","description":"AI missed-call text-back that books jobs for home-services contractors."}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">

@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ biz.legal_business_name or biz.name }}</title>
-  <meta name="description" content="Contact {{ biz.legal_business_name or biz.name }} for {{ biz.trade or 'home services' }} in {{ biz.service_area or 'your area' }}. Text messaging opt-in and privacy information.">
-  <link rel="canonical" href="/c/{{ request.view_args.slug if request.view_args else '' }}">
+  <meta name="description" content="Contact {{ biz.legal_business_name or biz.name }} for {{ biz.trade or 'home services' }} in {{ biz.service_area or 'your area' }}. SMS opt-in and privacy info.">
+  <link rel="canonical" href="{{ request.base_url }}">
   <meta property="og:title" content="{{ biz.legal_business_name or biz.name }}">
   <meta property="og:image" content="/static/og-default.png">
   <script type="application/ld+json">
