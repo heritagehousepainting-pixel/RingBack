@@ -44,6 +44,9 @@
 .btn-block{width:100%}
 .btn:focus-visible,.btn.is-focus{outline:none;box-shadow:0 0 0 3px var(--accent-ring)}
 .btn:disabled,.btn.is-disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+/* Inline directional arrow — a real SVG (one consistent set), not a text/emoji arrow.
+   Sized to the current font; aria-hidden in markup since the link text carries meaning. */
+.ico-arrow{width:1em;height:1em;flex:0 0 auto;display:inline-block;vertical-align:-.125em}
 
 .btn-primary{background:var(--accent);color:var(--accent-ink)}
 .btn-primary:hover,.btn-primary.is-hover{background:var(--accent-hover)}
