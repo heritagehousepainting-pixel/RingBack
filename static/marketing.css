@@ -243,6 +243,11 @@ a.mk-eyebrow:hover{opacity:.7}
   .mk-price.featured{transform:none}
   .mk-footer-top{grid-template-columns:1fr 1fr}
 }
+@media(max-width:520px){
+  /* On phones the 2-up trade cards can't fit their icon+name without spilling
+     the viewport — collapse to a single column. */
+  .mk-trades{grid-template-columns:1fr}
+}
 
 /* ============================================================================
    Landing hero (flagship) — two-column: copy + live phone demo.
