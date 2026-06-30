@@ -442,6 +442,41 @@
   {% endcall %}
 </form>
 
+<form method="post" action="/billing/portal" class="settings-col" style="margin-top:var(--space-5)">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+  <input type="hidden" name="interval" value="month">
+  {% call card(anchor='set-billing', title='Plan & billing', subtitle='Your FirstBack subscription, usage, and payment.') %}
+    {% if not billing_live %}
+      <p class="provider-note provider-note-soft">Billing isn’t switched on yet. Once it’s live, you’ll choose and manage your plan right here.</p>
+    {% else %}
+      <div class="field-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--space-3)">
+        <div><span class="provider-status">Current plan</span><br><strong>{{ (business.plan or 'None yet')|capitalize }}</strong></div>
+        <div><span class="provider-status">Status</span><br><strong>{{ (business.subscription_status or '—')|capitalize }}</strong></div>
+        {% if billing_remaining is not none %}
+        <div><span class="provider-status">Conversations left this month</span><br><strong>{{ billing_remaining }}{% if billing_granted %} of {{ billing_granted }}{% endif %}</strong></div>
+        {% endif %}
+      </div>
+      {% if business.stripe_customer_id %}
+        {# Existing subscriber → Stripe Billing Portal handles plan change / card / invoices / cancel. #}
+        <div style="margin-top:var(--space-4)">{{ button('Manage billing', type='submit') }}</div>
+        <p class="provider-note provider-note-soft">Change your plan, update your card, download invoices, or cancel — in Stripe’s secure portal.</p>
+      {% elif billing_gate_ok %}
+        {# Eligible to subscribe → in-app checkout (formaction overrides the portal action). #}
+        <p class="provider-note provider-note-soft" style="margin-top:var(--space-3)">Choose a plan to start. Change or cancel anytime.</p>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-3)">
+          <button class="btn btn-primary" type="submit" formaction="/billing/checkout" name="plan" value="starter">Starter — $99/mo</button>
+          <button class="btn btn-secondary" type="submit" formaction="/billing/checkout" name="plan" value="pro">Pro — $199/mo</button>
+          <button class="btn btn-secondary" type="submit" formaction="/billing/checkout" name="plan" value="crew">Crew — $399/mo</button>
+        </div>
+        <p class="provider-note provider-note-soft">Full comparison on the <a href="/pricing">pricing page</a>.</p>
+      {% else %}
+        {# PS-3 gate closed → explain when they can subscribe. #}
+        <p class="provider-note provider-note-soft" style="margin-top:var(--space-3)">{{ billing_gate_reason }}</p>
+      {% endif %}
+    {% endif %}
+  {% endcall %}
+</form>
+
 <form method="post" action="/settings/password" class="settings-col" style="margin-top:var(--space-5)">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   {% call card(anchor='set-password', title='Password', subtitle='Change the password you use to sign in to FirstBack.') %}

@@ -1362,7 +1362,16 @@ def settings():
          "disconnect_url": "/api/fsm/fieldedge/disconnect-token"},
     ]
     crm_active = next((p for p in crm_providers if p["connected"]), None)
+    # Plan & billing card: current plan/status (on `business`), usage, and the PS-3 gate
+    # so the owner can subscribe (when eligible) or manage an existing subscription.
+    _bill_remaining, _bill_grant = db.conversations_remaining(biz["id"])
     return render_template("settings.html", business=biz,
+                           billing_live=_billing.configured(),
+                           billing_gate_ok=_billing.checkout_gate_ok(biz),
+                           billing_gate_reason=_billing.checkout_gate_reason(biz),
+                           billing_remaining=_bill_remaining,
+                           billing_granted=((_bill_grant or {}).get("conversations_granted")
+                                            if _bill_grant else None),
                            crm_providers=crm_providers, crm_active=crm_active,
                            crmconnected=request.args.get("crmconnected"),
                            crmerror=request.args.get("crmerror"),
