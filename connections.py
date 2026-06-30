@@ -538,6 +538,16 @@ def a2p_sync(business):
             except Exception as _fe:
                 print(f"[firstback] a2p_sync flush error (biz {biz['id']}): {_fe}",
                       file=sys.stderr, flush=True)
+            # Activation handoff (ONBOARDING_BLUEPRINT.md): the contractor's own number is now
+            # live for automatic SMS. Advance to live_sms and turn OFF click-to-send -- the
+            # tap-to-send drafts are no longer needed (text-back is fully automatic now). No
+            # platform-number bridge to retire; there never was one.
+            try:
+                db.set_activation_state(biz["id"], "live_sms")
+                db.set_click_to_send_optin(biz["id"], False)
+            except Exception as _se:
+                print(f"[firstback] a2p_sync activation handoff error (biz {biz['id']}): {_se}",
+                      file=sys.stderr, flush=True)
             # F8: tell the owner they're LIVE -- the most important moment in the lifecycle
             # was previously silent. Lazy import + isolated try/except so a failed alert can
             # never break the sync loop (this runs on the cron tick for every pending tenant).
@@ -561,6 +571,37 @@ def a2p_sync_all():
             if a2p_sync(biz) != before:
                 changed += 1
     return changed
+
+
+def auto_submit_pending_a2p():
+    """Submit A2P registration for any business flagged a2p_pending_submit=1 once it has the
+    prerequisites: a provisioned number AND captured TCPA consent AND no campaign already on
+    file. Set by the forwarding-confirmation handler so the ~10-15 day 10DLC clock starts with
+    NO contractor action. Off the critical path -- voice is already live. Returns the count
+    submitted. Never raises (the cron tick must survive any one business failing).
+
+    The flag is cleared after the FIRST attempt regardless of outcome, so the cron never
+    hammers Twilio on a permanently-rejecting row. submit_a2p() persists each SID the instant
+    it's created (no orphaning on partial failure), and the wizard/owner surface any error for
+    a manual retry. On success, a2p_sync_all() then tracks the campaign to approval."""
+    submitted = 0
+    for biz in db.list_businesses():
+        try:
+            if not biz.get("a2p_pending_submit"):
+                continue
+            # Prerequisites: have a number, have consent, not already registered.
+            if (not biz.get("twilio_number") or not biz.get("tcpa_consent_at")
+                    or biz.get("a2p_campaign_sid")):
+                continue
+            result = submit_a2p(biz["id"])
+            if result.get("status") in ("submitted", "simulated"):
+                submitted += 1
+            # Clear after the first attempt no matter what -- never re-hammer Twilio on a tick.
+            db.mark_a2p_pending_submit(biz["id"], False)
+        except Exception as e:
+            print(f"[firstback] auto_submit_pending_a2p failed (biz {biz.get('id')}): {e}",
+                  file=sys.stderr, flush=True)
+    return submitted
 
 
 # ---- Carrier conditional call-forwarding codes (the missed-call catcher) ----

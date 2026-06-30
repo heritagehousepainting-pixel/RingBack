@@ -101,3 +101,23 @@
   .fs-row-text{flex:1 1 60%}
   .fs-row-cta{margin-left:auto}
 }
+
+/* ── Voice-first wizard additions (ONBOARDING_BLUEPRINT.md) ───────────────── */
+/* iPhone Live Voicemail warning on the forwarding step: it silently defeats
+   carrier no-answer forwarding, so flag it before the contractor dials. */
+.setup-iphone-warn{
+  margin:var(--space-3) 0;padding:var(--space-3) var(--space-4);
+  border:1px solid var(--warning,#c47f17);border-radius:var(--radius);
+  background:var(--warning-bg,#fff7ed);color:var(--ink);font-size:var(--text-sm);line-height:1.45}
+.setup-iphone-warn strong{color:var(--warning,#b45309)}
+
+/* Consent + click-to-send opt-in checkboxes on the forwarding step. */
+.setup-check{
+  display:flex;gap:var(--space-3);align-items:flex-start;
+  margin:var(--space-3) 0;padding:var(--space-3) var(--space-4);
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
+  font-size:var(--text-sm);line-height:1.45;color:var(--ink);cursor:pointer}
+.setup-check input[type=checkbox]{flex:0 0 auto;width:18px;height:18px;margin-top:2px;accent-color:var(--brand,#d2541b)}
+.setup-check span{flex:1 1 auto}
+.setup-check em{color:var(--ink-soft);font-style:italic}
+.setup-check-opt{background:var(--surface-2,var(--surface));border-style:dashed}

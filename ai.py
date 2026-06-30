@@ -497,8 +497,12 @@ def instant_opener(business):
     missed call costs reply rate). Returns (text, None) -- never books on the opener; the LLM
     takes over from turn 1 when the caller has actually said something."""
     name = (business.get("name") or "us").strip()
-    return (f"Hi, this is {name}. Sorry we just missed your call! What can we help you with? "
-            "We'd love to get you booked for a free estimate."), None
+    # TCPA: keep turn 0 informational (a response to someone who just called), not a
+    # solicitation, and carry the opt-out. The booking pivot happens from turn 1 once the
+    # caller has actually replied. See ONBOARDING_BLUEPRINT.md risk #7.
+    return (f"Hi — {name} here, we missed your call and want to help. "
+            "What's going on with your project? "
+            "Reply STOP to opt out. Msg&Data rates may apply."), None
 
 
 def generate_reply(business, history, exclude_slot_ids=None, lead_id=None):

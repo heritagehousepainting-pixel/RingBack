@@ -21,7 +21,7 @@
 
 {% block title %}Pricing{% endblock %}
 {% block meta %}
-<meta name="description" content="Simple flat pricing for AI missed-call text-back. Starter $99/mo, Pro $199/mo, Crew $399/mo. No per-call fees. Cancel anytime.">
+<meta name="description" content="Simple flat pricing for AI missed-call answering. Starter $99/mo, Pro $199/mo, Crew $399/mo. No per-call fees. Cancel anytime.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="FirstBack">
 <meta property="og:title" content="Pricing -- FirstBack">
@@ -68,7 +68,7 @@
       <div class="price-annual">or <strong>$950 / year</strong> &mdash; save $238 (20% off)</div>
       <p class="blurb">For solo operators who can’t afford to miss a call.</p>
       <ul>
-        <li>{{ check }} Instant missed-call text-back</li>
+        <li>{{ check }} Instant missed-call answering (AI voice + text)</li>
         <li>{{ check }} AI booking on your schedule</li>
         <li>{{ check }} Up to 250 missed-call replies / mo</li>
         <li>{{ check }} 1 phone number</li>
@@ -90,7 +90,7 @@
         {% if voice_configured %}
         <li>{{ check }} AI voice callback — reply CALL and FirstBack phones the customer back, talks through the job, and books the estimate</li>
         {% else %}
-        <li><span style="opacity:.5;font-size:.85em">coming soon</span> AI voice callback <span style="opacity:.6">(beta -- not yet available)</span></li>
+        <li><span style="opacity:.5;font-size:.85em">rolling out</span> AI voice callback <span style="opacity:.6">(turning on by number)</span></li>
         {% endif %}
         <li>{{ check }} Calendar integration</li>
         <li>{{ check }} Priority support</li>
@@ -124,7 +124,7 @@
     {% if voice_configured %}
     <details><summary>Can FirstBack call customers back by voice, not just text?</summary><p>Yes. A customer who would rather talk can reply CALL and FirstBack will phone them back in your name — an AI on the line that talks through the job and books the estimate. Only after they ask, and never outside quiet hours.</p></details>
     {% else %}
-    <details><summary>Can FirstBack call customers back by voice, not just text?</summary><p>Coming soon. Voice callback is in beta and rolling out on Pro and Crew. When it ships, a customer who would rather talk can ask and FirstBack will place an AI voice call that books the estimate -- only after the customer asks, and never outside quiet hours. Today FirstBack handles everything by text.</p></details>
+    <details><summary>Can FirstBack call customers back by voice, not just text?</summary><p>Yes. AI voice answering is rolling out to your number. Once it's on, a customer who would rather talk can reply CALL and FirstBack phones them back in your name -- an AI on the line that talks through the job and books the estimate, only after they ask and never outside quiet hours.</p></details>
     {% endif %}
     <details><summary>Can I keep my existing phone number?</summary><p>Yes. You forward your unanswered calls to FirstBack and keep the number your customers already know.</p></details>
     <details><summary>How long does setup take?</summary><p>Setup is same-day: we train FirstBack on your business and help you forward your missed calls, so call screening and forwarding work right away. Live text-back to your customers switches on once your carrier registration (A2P) clears — usually 1–5 business days. That carrier step is industry-wide for any business texting service, and we handle the paperwork for you.</p></details>

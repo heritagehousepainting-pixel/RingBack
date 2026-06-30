@@ -557,6 +557,19 @@ def init_db():
             c.execute(f"ALTER TABLE businesses ADD COLUMN {col} {ddl}")
     # Phase 5d backfill: existing growth_on=1 rows get growth_mode='tray' (idempotent).
     c.execute("UPDATE businesses SET growth_mode='tray' WHERE growth_on=1 AND growth_mode='off'")
+    # Onboarding activation state machine (ONBOARDING_BLUEPRINT.md): the day-0 catch is VOICE,
+    # SMS is deferred. activation_state: setup -> voice_live -> live_sms. There is NO platform
+    # toll-free path. click_to_send_optin: contractor opted into Vic-drafted, tap-to-send P2P
+    # texts during the 10DLC wait. tcpa_consent_at: when the owner authorized automated texts on
+    # callers' behalf (required for the A2P campaign attestation). a2p_pending_submit: set when
+    # forwarding is confirmed so the /tasks/run-due tick auto-submits the 10DLC registration.
+    biz_cols = [r[1] for r in c.execute("PRAGMA table_info(businesses)").fetchall()]
+    for col, ddl in (("activation_state", "TEXT DEFAULT 'setup'"),
+                     ("click_to_send_optin", "INTEGER DEFAULT 0"),
+                     ("tcpa_consent_at", "TEXT"),
+                     ("a2p_pending_submit", "INTEGER DEFAULT 0")):
+        if col not in biz_cols:
+            c.execute(f"ALTER TABLE businesses ADD COLUMN {col} {ddl}")
     # messages gain delivery tracking for real (Twilio) SMS.
     msg_cols = [r[1] for r in c.execute("PRAGMA table_info(messages)").fetchall()]
     for col in ("provider_sid", "delivery_status"):
@@ -938,6 +951,14 @@ def init_db():
             f"INSERT INTO businesses (id,{cols}) VALUES (1,{marks})",
             tuple(b.get(col) for col in _BUSINESS_COLS),  # new cols default to NULL -> config fallback
         )
+    # Append-only consent ledger (shared trades_core kernel). Created at boot so the
+    # inbound-call / web-widget handlers can record auditable SMS consent. Additive and
+    # safe on an existing DB. See ONBOARDING_BLUEPRINT.md P1 (consent events).
+    try:
+        import consent
+        consent.ensure_ledger(conn)
+    except Exception as e:
+        print(f"[firstback] consent ledger init skipped: {e}", file=__import__("sys").stderr)
     conn.commit()
     conn.close()
 
@@ -1199,6 +1220,51 @@ def set_a2p_status(business_id, status):
     Twilio status sync."""
     conn = get_conn()
     conn.execute("UPDATE businesses SET a2p_status=? WHERE id=?", (status, business_id))
+    conn.commit()
+    conn.close()
+
+
+# Onboarding activation states (ONBOARDING_BLUEPRINT.md). The day-0 catch is VOICE; SMS is
+# deferred until the contractor's own number clears 10DLC. No platform toll-free anywhere.
+ACTIVATION_STATES = ("setup", "voice_live", "live_sms")
+
+
+def set_activation_state(business_id, state):
+    """Move a business through the onboarding activation machine: setup -> voice_live ->
+    live_sms. Rejects unknown states so a typo can't silently strand a contractor."""
+    if state not in ACTIVATION_STATES:
+        raise ValueError(f"unknown activation_state {state!r}; expected one of {ACTIVATION_STATES}")
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET activation_state=? WHERE id=?", (state, business_id))
+    conn.commit()
+    conn.close()
+
+
+def set_click_to_send_optin(business_id, on):
+    """Set whether the contractor opted into Vic-drafted, tap-to-send P2P text-backs during
+    the 10DLC wait (the optional pre-approval SMS stage)."""
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET click_to_send_optin=? WHERE id=?",
+                 (1 if on else 0, business_id))
+    conn.commit()
+    conn.close()
+
+
+def mark_a2p_pending_submit(business_id, pending=True):
+    """Flag (or clear) a business for automatic A2P registration on the next /tasks/run-due
+    tick. Set when call-forwarding is confirmed + TCPA consent is captured."""
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET a2p_pending_submit=? WHERE id=?",
+                 (1 if pending else 0, business_id))
+    conn.commit()
+    conn.close()
+
+
+def set_tcpa_consent(business_id, ts):
+    """Record when the owner authorized FirstBack to send automated texts to callers on their
+    behalf (required for the A2P campaign attestation; ts is an ISO string)."""
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET tcpa_consent_at=? WHERE id=?", (ts, business_id))
     conn.commit()
     conn.close()
 

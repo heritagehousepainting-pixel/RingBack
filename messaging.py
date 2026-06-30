@@ -142,6 +142,14 @@ def send_sms(business, to, body, lead_id=None, status_callback=None, gate=True,
             db.add_message(lead_id, "out", body)
             if biz_id is not None:
                 db.queue_blocked_send(biz_id, lead_id, to, body)
+        # Optional pre-approval SMS stage (ONBOARDING_BLUEPRINT.md): if the contractor opted
+        # into click-to-send, surface the draft as a tap-to-send action they fire from their
+        # OWN phone (person-to-person, no A2P gate) instead of a silent hold. Voice already has
+        # the lead either way, so this is additive -- the default (no opt-in) stays "blocked",
+        # which test_callback.py and the dashboard's blocked-queue depend on.
+        if biz_id is not None and isinstance(business, dict) and business.get("click_to_send_optin"):
+            return {"status": "click_to_send", "reason": "a2p_pending",
+                    "link": click_to_send_link(to, body), "body": body}
         return {"status": "blocked", "reason": "a2p_not_approved"}
 
     # Owner alerts (gate=False) use the platform alert number so they never depend
@@ -182,6 +190,15 @@ def send_sms(business, to, body, lead_id=None, status_callback=None, gate=True,
     if lead_id is not None:
         db.add_message(lead_id, "out", body, provider_sid=sid)
     return {"status": "sent", "sid": sid}
+
+
+def click_to_send_link(to, body):
+    """An `sms:` deep link the contractor taps to send Vic's draft from their OWN phone
+    (person-to-person, so no A2P gate) during the 10DLC wait. Uses the `?body=` query form,
+    which iOS 8+ and modern Android both honor. The number is normalized to digits/`+`."""
+    from urllib.parse import quote
+    num = "".join(ch for ch in (to or "") if ch.isdigit() or ch == "+")
+    return f"sms:{num}?body={quote(body or '')}"
 
 
 def outbound_mode(business, to):
@@ -533,6 +550,12 @@ def create_a2p_campaign(business, messaging_service_sid, brand_sid):
         if slug:
             from config import MICRO_SITE_DOMAIN
             opt_in_url = f"https://{slug}.{MICRO_SITE_DOMAIN}"
+        # TCR requires a reachable privacy policy + terms URL on every campaign. Prefer the
+        # contractor's micro-site (their identity), fall back to the platform base. Both /privacy
+        # and /terms are live Flask routes. See ONBOARDING_BLUEPRINT.md P0.2.
+        site_base = opt_in_url or (PUBLIC_BASE_URL.rstrip("/") if PUBLIC_BASE_URL else "")
+        privacy_url = f"{site_base}/privacy" if site_base else ""
+        terms_url = f"{site_base}/terms" if site_base else ""
         payload = {
             "BrandRegistrationSid": brand_sid,
             # UseCase is hardcoded — missed-call text-backs are CUSTOMER_CARE, never marketing.
@@ -554,6 +577,10 @@ def create_a2p_campaign(business, messaging_service_sid, brand_sid):
         }
         if opt_in_url:
             payload["OptInImageUrls"] = opt_in_url
+        if privacy_url:
+            payload["PrivacyPolicyUrl"] = privacy_url
+        if terms_url:
+            payload["TermsAndConditionsUrl"] = terms_url
         # Include IsrId ONLY when TWILIO_A2P_RESELLER_SID is set (ISV reseller path).
         if TWILIO_A2P_RESELLER_SID:
             payload["IsrId"] = TWILIO_A2P_RESELLER_SID

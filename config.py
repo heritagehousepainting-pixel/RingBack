@@ -202,6 +202,14 @@ GOOGLE_CONTACTS_REDIRECT_URI = os.environ.get(
     "GOOGLE_CONTACTS_REDIRECT_URI",
     "http://127.0.0.1:8800/api/contacts/google/callback")
 
+# Gmail email auto-answer (google_mail.py) is a THIRD independent Google OAuth connection
+# (own redirect URI + Gmail scope), powered by the same GOOGLE_CLIENT_ID/SECRET. Add this
+# redirect URI to the OAuth client's "Authorized redirect URIs" too. See google_mail.py for
+# the scope note (gmail.modify is a Google "restricted" scope and needs app verification).
+GOOGLE_MAIL_REDIRECT_URI = os.environ.get(
+    "GOOGLE_MAIL_REDIRECT_URI",
+    "http://127.0.0.1:8800/api/email/google/callback")
+
 # --- Microsoft Outlook / Microsoft 365 Calendar (optional; gated) ---------
 # To turn on: in Azure Portal create an App Registration (any org directory +
 # personal MS accounts), add the redirect URI, grant delegated permissions

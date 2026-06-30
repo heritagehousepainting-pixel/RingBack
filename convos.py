@@ -74,7 +74,7 @@ def _flag(business_id, convo_id, user_tid, message, meta, prior, gap_route=""):
     if status == "capability_gap":
         db.add_flag(business_id, convo_id, user_tid, "capability_gap",
                     ("route:" + gap_route) if gap_route
-                    else "Vic had no tool for this and pointed elsewhere.")
+                    else "The assistant had no tool for this and pointed elsewhere.")
     elif status == "empty":
         db.add_flag(business_id, convo_id, user_tid, "empty",
                     "A tool ran but came back with nothing.")

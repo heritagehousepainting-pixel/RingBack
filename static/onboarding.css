@@ -151,6 +151,22 @@
   background:var(--success);color:var(--surface);border-radius:16px;border-bottom-right-radius:4px;font-size:.86rem;font-weight:600}
 .ob-sms-booked svg{width:15px;height:15px;flex:0 0 auto}
 
+/* Voice-call proof variant (default). Both phones share one grid cell; the hero's
+   Text/Call toggle flips which one shows (is-call / is-text on .ob-proof). */
+.ob-phone-wrap{position:relative;width:min(290px,80vw)}
+.ob-proof.is-call .ob-phone-text{display:none}
+.ob-proof.is-text .ob-phone-call{display:none}
+.ob-call-ico{flex:0 0 auto;margin-left:auto;width:18px;height:18px;color:var(--accent)}
+.ob-call-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success);
+  vertical-align:middle;margin-right:4px;animation:ob-callpulse 1.4s ease-in-out infinite}
+@keyframes ob-callpulse{0%,100%{opacity:.35}50%{opacity:1}}
+/* spoken lines: caller (incoming) left + light, AI (answer) right + accent */
+.ob-cap{max-width:86%;padding:9px 13px;font-size:.88rem;line-height:1.4;border-radius:16px}
+.ob-cap-caller{align-self:flex-start;background:var(--surface);color:var(--ink);border:1px solid var(--border);
+  border-bottom-left-radius:4px;font-style:italic}
+.ob-cap-ai{align-self:flex-end;background:var(--accent);color:var(--surface);border-bottom-right-radius:4px}
+@media (prefers-reduced-motion: reduce){.ob-call-dot{animation:none}}
+
 /* Live conversation: bubbles arrive in sequence, then booking.json settles in.
    CSS-only (no-JS-safe); 'both' fill hides each bubble during its delay. */
 @keyframes ob-pop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
@@ -210,7 +226,7 @@
 
 @media(max-width:860px){
   .ob-proof{grid-template-columns:1fr;justify-items:center}
-  .ob-phone{order:-1}
+  .ob-phone-wrap{order:-1}
 }
 @media(max-width:600px){
   .ob-content{padding-left:18px;padding-right:18px}

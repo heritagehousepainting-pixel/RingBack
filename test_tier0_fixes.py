@@ -113,8 +113,10 @@ _auth = client.get("/signup").get_data(as_text=True)
 check("F6: auth page no longer shows a 5-star self-review", 'aria-label="5 out of 5"' not in _auth)
 _sol = client.get("/solutions").get_data(as_text=True)
 check("F7: solutions no longer claims present-tense 'live AI voice'", "live AI voice" not in _sol)
-check("F7: solutions hedges voice as coming soon",
-      "coming soon" in _sol.lower())
+# Voice is a shipped product now; when a deploy hasn't wired it (voice_configured False, as in
+# this test env) the page must hedge as "rolling out" -- never over-claim, never call it vaporware.
+check("F7: solutions hedges unconfigured voice as rolling out (not coming soon, not present-tense live)",
+      "rolling out" in _sol.lower())
 _home = client.get("/").get_data(as_text=True)
 check("F5: a marketing page links the public /demo (not /simulator)",
       "/demo" in _home and 'href="/simulator"' not in _home)

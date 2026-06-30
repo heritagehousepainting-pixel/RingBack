@@ -38,6 +38,7 @@ import triage
 import reputation
 import contact_import
 import google_contacts
+import google_mail
 import growth
 import jobber_fsm
 import hcp_fsm
@@ -1718,6 +1719,15 @@ def setup_forwarding():
     biz = current_business()
     if biz is None:
         return redirect("/dashboard")
+    # The forwarding screen also captures the contractor's TCPA authorization to text callers
+    # on their behalf (required in the UI via the checkbox) and the optional click-to-send
+    # opt-in. Captured when present; the A2P auto-submit downstream gates on tcpa_consent_at,
+    # so no consent => no texting registration ever starts. See ONBOARDING_BLUEPRINT.md.
+    if request.form.get("tcpa_consent"):
+        from datetime import datetime, timezone
+        db.set_tcpa_consent(biz["id"], datetime.now(timezone.utc).isoformat())
+    if request.form.get("mode"):   # a real wizard submit (not a bare legacy post)
+        db.set_click_to_send_optin(biz["id"], bool(request.form.get("click_to_send")))
     mode = request.form.get("mode") or "catcher"
     if mode == "dial":
         cell = (request.form.get("forward_to") or "").strip()
@@ -2738,6 +2748,43 @@ def google_contacts_disconnect():
     return jsonify(connected=False)
 
 
+# ---- Gmail email auto-answer OAuth (mirrors Google Contacts; own redirect + scope) ----
+
+@app.route("/api/email/google/connect")
+@login_required
+def google_mail_connect():
+    if not google_mail.configured():
+        return redirect("/settings?gmerror=unconfigured")
+    state = secrets.token_urlsafe(16)
+    session["gm_state"] = state           # CSRF guard, verified on callback
+    return redirect(google_mail.auth_url(state))
+
+
+@app.route("/api/email/google/callback")
+@login_required
+def google_mail_callback():
+    expected = session.pop("gm_state", None)
+    if request.args.get("error") or not request.args.get("code"):
+        return redirect("/settings?gmerror=denied")
+    if not expected or request.args.get("state") != expected:
+        return redirect("/settings?gmerror=state")
+    try:
+        google_mail.connect_with_code(current_business()["id"], request.args["code"])
+    except Exception as e:
+        print(f"[firstback] gmail connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?gmerror=exchange")
+    return redirect("/settings?gmconnected=1")
+
+
+@app.route("/api/email/google/disconnect", methods=["POST"])
+@login_required
+def google_mail_disconnect():
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    google_mail.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
 # ---- Plan 13: FSM / Jobber OAuth + sync routes ----
 
 @app.route("/api/fsm/jobber/connect")
@@ -3050,6 +3097,14 @@ def _missed_call_textback(biz, caller, call_sid="", dial_status=""):
     if not lead:
         lead = db.get_lead(db.create_lead(biz["id"], "New Caller", caller))
     db.log_call(biz["id"], call_sid, lead_id=lead["id"], engaged=1, **common)
+    # Record auditable SMS consent: an inbound call is a solicited contact, which establishes
+    # consent to text back. Append-only ledger entry (ONBOARDING_BLUEPRINT.md P1), never fatal.
+    try:
+        _cc = db.get_conn()
+        consent.record(_cc, biz["id"], caller, "sms", "granted", source="inbound-call")
+        _cc.close()
+    except Exception:
+        pass
     # Greet only an empty thread, so a repeat missed call mid-conversation does not
     # re-introduce us (the owner is still alerted via the 'lead' alert + call log).
     if not db.get_messages(lead["id"]):
@@ -3165,6 +3220,17 @@ def twilio_voice_inbound():
         db.set_forwarding_confirmed(biz["id"], True)
         db.set_forwarding_sentinel(biz["id"], None, None)   # clear sentinel
         db.set_forwarding_probe(biz["id"])                  # record probe time
+        # Forwarding is live -> the contractor is now catching missed calls on VOICE (the day-0
+        # promise). Advance the activation machine and, if TCPA consent is captured, flag A2P for
+        # automatic background submission on the next /tasks/run-due tick (no contractor action).
+        try:
+            if biz.get("activation_state") in (None, "setup"):
+                db.set_activation_state(biz["id"], "voice_live")
+            if biz.get("tcpa_consent_at") and not biz.get("a2p_campaign_sid"):
+                db.mark_a2p_pending_submit(biz["id"], True)
+        except Exception as e:
+            print(f"[firstback] post-forwarding activation step failed (biz {biz['id']}): {e}",
+                  file=sys.stderr, flush=True)
         return _twiml("<Response><Hangup/></Response>")
     forward = biz.get("forward_to")
     if forward:
@@ -3343,6 +3409,13 @@ def widget_lead():
     lead = db.get_lead_by_phone(biz["id"], phone)
     if not lead:
         lead = db.get_lead(db.create_lead(biz["id"], name, phone, source="web_widget"))
+    # The visitor submitted their own number asking to be contacted -> auditable SMS consent.
+    try:
+        _cc = db.get_conn()
+        consent.record(_cc, biz["id"], phone, "sms", "granted", source="web-widget")
+        _cc.close()
+    except Exception:
+        pass
     if not db.get_messages(lead["id"]):
         reply = open_conversation(biz, lead)        # records the thread + alerts the owner
         messaging.send_sms(biz, phone, reply)       # transmit only (already recorded)
@@ -3554,12 +3627,24 @@ def tasks_run_due():
     if not TASKS_SECRET or not secrets.compare_digest(sent, TASKS_SECRET):
         return jsonify(error="Forbidden."), 403
     out = reminders.tick_once()
+    # Auto-submit A2P for businesses whose forwarding just confirmed (off the critical path:
+    # voice is already live; this starts the ~10-15 day 10DLC clock with no contractor action).
+    try:
+        out["a2p_submitted"] = connections.auto_submit_pending_a2p()
+    except Exception as e:
+        print(f"[firstback] auto_submit_pending_a2p failed: {e}", file=sys.stderr, flush=True)
     # Also refresh A2P registration status from Twilio so an approved campaign flips
     # tenants live without anyone clicking. Defensive: never breaks the reminder tick.
     try:
         out["a2p_synced"] = connections.a2p_sync_all()
     except Exception as e:
         print(f"[firstback] a2p_sync_all failed: {e}", file=sys.stderr, flush=True)
+    # Gmail email auto-answer: Vic replies to any new inbound email leads for connected
+    # tenants. No-op until a contractor links Gmail. Defensive: never breaks the tick.
+    try:
+        out["email_answered"] = google_mail.poll_and_answer_all()
+    except Exception as e:
+        print(f"[firstback] gmail poll_and_answer_all failed: {e}", file=sys.stderr, flush=True)
     return jsonify(out)
 
 

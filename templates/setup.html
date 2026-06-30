@@ -4,9 +4,9 @@
 {% from "components/ui/badge.html" import pill %}
 
 {% block title %}Go Live{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="/static/setup.css?v=2">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/setup.css?v=3">{% endblock %}
 {% block page_title %}Go Live{% endblock %}
-{% block page_sub %}<p class="page-sub">Connect your phone so {{ app_name }} texts back every missed call — no tech setup, we walk you through it.</p>{% endblock %}
+{% block page_sub %}<p class="page-sub">Set up call forwarding so {{ app_name }} answers your missed calls — starting today. Texting turns on automatically once your number clears carrier verification. No tech setup, we walk you through it.</p>{% endblock %}
 {% block header_actions %}{% if live_verified %}{{ pill('Live', 'booked', dot=true) }}{% elif is_live %}{{ pill('Almost', 'warning', dot=true) }}{% endif %}{% endblock %}
 
 {% block content %}
@@ -45,7 +45,7 @@
     <svg class="b-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
     <div>
       <p class="b-title">{{ done_count }} of {{ steps|length }} steps done</p>
-      <p class="b-sub">A few things left before {{ app_name }} can text your customers:</p>
+      <p class="b-sub">Forward your calls and {{ app_name }} starts answering today. The rest turns on in the background — here's what's left:</p>
       <ul class="setup-blockers">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
     </div>
   </div>
@@ -172,7 +172,10 @@
         </details>
         {# ===== Step: Forwarding (Phase 4) ===== #}
         {% elif s.key == 'forwarding' %}
-        <p class="setup-note">The last step happens on your phone: tell your carrier to send <em>missed</em> calls to {{ app_name }}. You keep answering calls normally — only the ones you miss get a text back.</p>
+        <p class="setup-note">This is the one that matters: tell your carrier to send <em>missed</em> calls to {{ app_name }}, and its AI starts answering them today — from your own number, on the spot. You keep taking calls normally; only the ones you miss reach {{ app_name }}.</p>
+        <div class="setup-iphone-warn" role="note">
+          <strong>iPhone?</strong> Turn off Settings → Phone → Live Voicemail first, or your carrier won't forward missed calls.
+        </div>
         {# pick the carrier, re-render with that carrier's exact code #}
         <form method="get" action="/setup" class="step-form">
           <input type="hidden" name="edit" value="forwarding">
@@ -194,6 +197,14 @@
         <form method="post" action="/setup/forwarding" class="step-form">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <input type="hidden" name="mode" value="catcher">
+          <label class="setup-check">
+            <input type="checkbox" name="tcpa_consent" value="1" required{{ ' checked' if business.tcpa_consent_at else '' }}>
+            <span>I authorize {{ app_name }} to send automated text messages to my callers on my behalf. Every text includes opt-out instructions (reply STOP).</span>
+          </label>
+          <label class="setup-check setup-check-opt">
+            <input type="checkbox" name="click_to_send" value="1"{{ ' checked' if business.click_to_send_optin else '' }}>
+            <span>While my number is being verified (~2 weeks), let {{ app_name }} draft text-backs for me to send with one tap from my own phone. <em>Optional — {{ app_name }} answers your calls either way.</em></span>
+          </label>
           {{ button("I've set up forwarding", type='submit') }}
         </form>
         <details class="setup-adv">

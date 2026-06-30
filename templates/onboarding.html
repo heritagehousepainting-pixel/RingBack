@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ app_name }} — Every missed call, booked by AI in seconds</title>
+  <title>{{ app_name }} — Every missed call, answered and booked by AI</title>
   {# Plan 09-5: SEO/OG meta on the live homepage (onboarding.html is the served "/" page,
      not landing.html). og:image omitted until /static/og-default.png is generated. #}
-  <meta name="description" content="FirstBack texts back missed calls in seconds and books the estimate -- AI for home-services contractors. Set up in a day, flat rate, no per-call fees.">
+  <meta name="description" content="FirstBack's AI answers your missed calls, captures the lead, and books the estimate -- so the job doesn't go to the next contractor. AI for home-services contractors. Set up in a day, flat rate, no per-call fees.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="FirstBack">
   <meta property="og:title" content="FirstBack -- Turn every missed call into a booked job">
-  <meta property="og:description" content="Miss a call. We text back. They book. Set up in a day, flat monthly rate, no per-call fees.">
+  <meta property="og:description" content="Miss a call. FirstBack's AI answers it, talks to the customer, and books the job. Set up in a day, flat monthly rate, no per-call fees.">
   <meta property="og:url" content="{{ request.base_url }}">
   <meta property="og:image" content="{{ request.url_root }}static/favicon-512.png">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="FirstBack -- Turn every missed call into a booked job">
-  <meta name="twitter:description" content="Miss a call. We text back. They book.">
+  <meta name="twitter:description" content="Miss a call. FirstBack's AI answers it and books the job.">
   <meta name="twitter:image" content="{{ request.url_root }}static/favicon-512.png">
   <link rel="canonical" href="{{ request.base_url }}">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"FirstBack","url":"{{ request.url_root }}","logo":"{{ request.url_root }}static/favicon-512.png","description":"AI missed-call text-back that books jobs for home-services contractors."}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"FirstBack","url":"{{ request.url_root }}","logo":"{{ request.url_root }}static/favicon-512.png","description":"AI that answers missed calls and books jobs for home-services contractors."}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -86,10 +86,10 @@
       <span class="br">[</span> <span class="n">01</span> / 01 <span class="br">]</span> · <span id="ob-eyebrow-text">Missed-call autopilot</span>
     </span>
 
-    <h1 class="ob-title">Every missed call,<br>booked by AI <span class="hot">in seconds.</span></h1>
+    <h1 class="ob-title">Every missed call,<br><span class="hot">answered and booked.</span></h1>
 
-    <p class="ob-sub" id="ob-sub">When you can’t pick up, {{ app_name }} texts the caller back, answers their questions,
-      and books the estimate. No missed jobs. No voicemail. No waiting.</p>
+    <p class="ob-sub" id="ob-sub">When you can’t get to the phone, {{ app_name }}’s AI does — answers the call,
+      captures the lead, and books the estimate. So the job doesn’t go to the next contractor.</p>
 
     <form class="ob-search" action="/signup" method="get">
       <div class="ob-search-row">
@@ -100,11 +100,11 @@
         </button>
       </div>
       <div class="ob-tabs" role="tablist">
-        <button class="ob-seg active" type="button" data-seg="text">
+        <button class="ob-seg" type="button" data-seg="text">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
           Text
         </button>
-        <button class="ob-seg" type="button" data-seg="call">
+        <button class="ob-seg active" type="button" data-seg="call">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>
           Call
         </button>
@@ -118,35 +118,63 @@
 
     <!-- Knows who to text: the screen, in one line -->
     <ul class="ob-screen-strip" aria-label="What FirstBack screens">
-      <li><span class="dot-ok" aria-hidden="true"></span> Texts real customers</li>
+      <li><span class="dot-ok" aria-hidden="true"></span> Answers real customers</li>
       <li><span class="dot-no" aria-hidden="true"></span> Screens spam &amp; robocalls</li>
       <li><span class="dot-you" aria-hidden="true"></span> Skips contacts you know</li>
     </ul>
 
-    <!-- Proof: ruled frame, registration ticks, phone + booking.json -->
-    <div class="ob-proof">
-      <span class="ob-proof-label">live · missed-call → booked</span>
+    <!-- Proof: ruled frame, registration ticks, phone (voice/text) + booking.json.
+         is-call shows the voice transcript by default (hero leads with voice); the
+         Text/Call toggle above flips it. -->
+    <div class="ob-proof is-call" id="ob-proof">
+      <span class="ob-proof-label">live · missed call → booked</span>
       <span class="ob-tick tl" aria-hidden="true"></span><span class="ob-tick tr" aria-hidden="true"></span>
       <span class="ob-tick bl" aria-hidden="true"></span><span class="ob-tick br" aria-hidden="true"></span>
 
-      <div class="ob-phone" role="img" aria-label="Text conversation: the AI replies to a missed call and books a painting estimate for Thursday at 10 AM.">
-        <div class="ob-phone-screen">
-          <div class="ob-phone-top">
-            <span class="av">{{ (business.name if business else 'Heritage House Painting')[:1] }}</span>
-            <span class="who">
-              <span class="nm">{{ business.name if business else 'Heritage House Painting' }}</span>
-              <span class="st">Missed call · just now</span>
-            </span>
+      <div class="ob-phone-wrap">
+        <!-- Voice proof (default): the AI answers the call, live transcript, books -->
+        <div class="ob-phone ob-phone-call" role="img" aria-label="Voice call: FirstBack's AI answers a missed call, talks through the job, and books a painting estimate for Thursday at 10 AM.">
+          <div class="ob-phone-screen">
+            <div class="ob-phone-top">
+              <span class="av">{{ (business.name if business else 'Heritage House Painting')[:1] }}</span>
+              <span class="who">
+                <span class="nm">{{ business.name if business else 'Heritage House Painting' }}</span>
+                <span class="st"><span class="ob-call-dot" aria-hidden="true"></span> AI answered · on call 0:48</span>
+              </span>
+              <svg class="ob-call-ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div class="ob-thread ob-call-thread">
+              <div class="ob-sms-meta">answered by AI · live transcript</div>
+              <div class="ob-cap ob-cap-caller">“Hi — do you do exterior painting?”</div>
+              <div class="ob-cap ob-cap-ai">“We sure do. Whole house, or just a section?”</div>
+              <div class="ob-cap ob-cap-caller">“Whole house, two stories.”</div>
+              <div class="ob-cap ob-cap-ai">“Got it. I can have someone out Thursday at 10 for a free estimate — want me to lock it in?”</div>
+              <div class="ob-cap ob-cap-caller">“Yeah, that works.”</div>
+              <div class="ob-sms-booked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Booked — Thursday 10 AM</div>
+            </div>
           </div>
-          <div class="ob-thread">
-            <div class="ob-sms-meta">texted back in seconds</div>
-            <div class="ob-sms ob-sms-out">Hi! Sorry we missed your call. What were you looking to get painted?</div>
-            <div class="ob-sms ob-sms-in">Kitchen and living room</div>
-            <div class="ob-sms ob-sms-out">Got it — what part of town are you in?</div>
-            <div class="ob-sms ob-sms-in">Downtown</div>
-            <div class="ob-sms ob-sms-out">Perfect. I can get someone out Thursday 10 AM for a free estimate — book it?</div>
-            <div class="ob-sms ob-sms-in">Yes please</div>
-            <div class="ob-sms-booked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Booked — Thursday 10 AM</div>
+        </div>
+
+        <!-- Text proof: shown when the Text toggle is active -->
+        <div class="ob-phone ob-phone-text" role="img" aria-label="Text conversation: the AI replies to a missed call and books a painting estimate for Thursday at 10 AM.">
+          <div class="ob-phone-screen">
+            <div class="ob-phone-top">
+              <span class="av">{{ (business.name if business else 'Heritage House Painting')[:1] }}</span>
+              <span class="who">
+                <span class="nm">{{ business.name if business else 'Heritage House Painting' }}</span>
+                <span class="st">Missed call · just now</span>
+              </span>
+            </div>
+            <div class="ob-thread">
+              <div class="ob-sms-meta">texted back in seconds</div>
+              <div class="ob-sms ob-sms-out">Hi! Sorry we missed your call. What were you looking to get painted?</div>
+              <div class="ob-sms ob-sms-in">Kitchen and living room</div>
+              <div class="ob-sms ob-sms-out">Got it — what part of town are you in?</div>
+              <div class="ob-sms ob-sms-in">Downtown</div>
+              <div class="ob-sms ob-sms-out">Perfect. I can get someone out Thursday 10 AM for a free estimate — book it?</div>
+              <div class="ob-sms ob-sms-in">Yes please</div>
+              <div class="ob-sms-booked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Booked — Thursday 10 AM</div>
+            </div>
           </div>
         </div>
       </div>
@@ -185,8 +213,8 @@
   <div class="ob-after-inner">
     <span class="ob-eyebrow"><span class="br">//</span> while you were on the ladder</span>
     <h2 class="ob-h2">You wake up to a plan,<br>not a pile.</h2>
-    <p class="ob-after-sub">{{ app_name }} works the phones overnight. By morning, Vic — your
-      assistant — hands you one money-ranked briefing: who to call first, what each job is
+    <p class="ob-after-sub">{{ app_name }} works the phones overnight. By morning, its AI
+      hands you one money-ranked briefing: who to call first, what each job is
       worth, what’s already booked. No scrolling a dozen threads to find the lead that pays.</p>
 
     <div class="ob-proof ob-proof-brief">
@@ -240,23 +268,30 @@
   // AI-voice-callback product, so "Call" actually tells the voice story.
   var OB_MODES = {
     text: {
-      eyebrow: 'Missed-call autopilot',
-      sub: 'When you can’t pick up, FirstBack texts the caller back, answers their questions, and books the estimate. No missed jobs. No voicemail. No waiting.'
+      eyebrow: 'Text-back autopilot',
+      sub: 'When you can’t reply, FirstBack texts the caller back, answers their questions, and books the estimate — in your name, from your number.'
     },
     call: {
-      eyebrow: 'AI voice callback',
-      sub: {% if voice_configured %}'Reply CALL and FirstBack phones you back, talks through the job, and books the estimate — in your name, within quiet hours only.'{% else %}'Prefer to talk? Voice callback is coming soon — FirstBack will be able to call the customer back in your name and book the estimate by voice. It is not available yet; today FirstBack handles everything by text.'{% endif %}
+      eyebrow: 'AI voice receptionist',
+      sub: {% if voice_configured %}'When you can’t pick up, FirstBack answers the call — talks through the job and books the estimate, in your name, from your number.'{% else %}'Voice answering is rolling out — FirstBack picks up the call, talks through the job, and books it in your name. Ask us about turning it on for your number.'{% endif %}
     }
   };
   var obSub = document.getElementById('ob-sub');
   var obEyebrow = document.getElementById('ob-eyebrow-text');
+  var obProof = document.getElementById('ob-proof');
   document.querySelectorAll('[data-seg]').forEach(function (seg) {
     seg.addEventListener('click', function () {
       document.querySelectorAll('[data-seg]').forEach(function (s) { s.classList.remove('active'); });
       seg.classList.add('active');
-      var m = OB_MODES[seg.getAttribute('data-seg')] || OB_MODES.text;
+      var key = seg.getAttribute('data-seg');
+      var m = OB_MODES[key] || OB_MODES.text;
       if (obSub) obSub.textContent = m.sub;
       if (obEyebrow) obEyebrow.textContent = m.eyebrow;
+      // Flip the proof visual to match: voice transcript for "call", SMS thread for "text".
+      if (obProof) {
+        obProof.classList.toggle('is-call', key === 'call');
+        obProof.classList.toggle('is-text', key === 'text');
+      }
     });
   });
 </script>

@@ -555,16 +555,18 @@ try:
 finally:
     _conn.golive_summary = _real_gl
 
-# --- Phase 2b: the Vic persona is one voice woven through every LLM reply path ---------
+# --- Phase 2b: the assistant persona is one voice woven through every LLM reply path -----
+# Brand: no persona NAME -- the product is just FirstBack, powered by AI. The persona must
+# identify as FirstBack's AI (never "Vic") and hold the foreman stance.
 _persona = assistant._VIC_PERSONA.lower()
-check("the Vic persona names Vic and the foreman stance",
-      "vic" in _persona and "foreman" in _persona)
-check("the Vic persona enforces money-first / own-the-rec / no-performing / no-made-up-names",
+check("the persona identifies as FirstBack's AI (no persona name) and holds the foreman stance",
+      "firstback" in _persona and "foreman" in _persona and "vic" not in _persona)
+check("the persona enforces money-first / own-the-rec / no-performing / no-made-up-names",
       all(k in _persona for k in ("money", "recommendation", "never perform", "never make up")))
 _loopsys = assistant._loop_system(None)
-check("the tool-loop system prompt speaks as Vic and keeps the must-call-tool rule",
-      "You are Vic" in _loopsys and "MUST call the matching tool" in _loopsys)
-check("the keyword-floor reply is in Vic's voice and surfaces the briefing trigger",
+check("the tool-loop system prompt speaks as FirstBack's AI and keeps the must-call-tool rule",
+      "You are FirstBack" in _loopsys and "MUST call the matching tool" in _loopsys)
+check("the keyword-floor reply is in the assistant's voice and surfaces the briefing trigger",
       "what should I focus on" in assistant._chat_reply("hello there"))
 
 # --- Phase 2c: real-time feed poll (/api/feed) ----------------------------------------
