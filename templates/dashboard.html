@@ -248,4 +248,100 @@
   });
 }());
 </script>
+<h2 class="section-sep">Return on investment</h2>
+<style>.section-sep{margin-top:var(--space-4);margin-bottom:calc(-1 * var(--space-2));font-size:var(--text-base);color:var(--ink-soft);font-weight:600}</style>
+<div id="roi" data-endpoint="/api/analytics">
+  <div class="roi-range" role="group" aria-label="Time range">
+    <button type="button" class="btn btn-secondary btn-sm roi-r is-active" data-range="30d" aria-pressed="true">30 days</button>
+    <button type="button" class="btn btn-secondary btn-sm roi-r" data-range="90d" aria-pressed="false">90 days</button>
+    <button type="button" class="btn btn-secondary btn-sm roi-r" data-range="all" aria-pressed="false">All time</button>
+  </div>
+  <div id="roi-headline" class="roi-headline-tile" aria-live="polite" style="display:none">
+    <div class="roi-headline-inner">
+      <span class="roi-headline-label">Estimated return</span>
+      <span class="roi-headline-value" id="roi-headline-value"></span>
+      <span class="roi-headline-sub" id="roi-headline-sub"></span>
+    </div>
+    <p class="roi-headline-note" id="roi-headline-note"></p>
+  </div>
+  <p class="roi-loss-note" id="roi-loss-note" style="display:none">Without text-back, missed calls convert at ~0%.</p>
+  <div id="roi-tiles" class="stat-row" aria-live="polite"></div>
+  {% call card(title='Leads vs booked estimates', subtitle='Per day in the selected window.') %}
+    <div class="roi-legend">
+      <span class="roi-key roi-key-leads">Leads</span>
+      <span class="roi-key roi-key-booked">Booked estimates</span>
+    </div>
+    <div id="roi-chart" class="roi-chart" aria-live="polite"></div>
+  {% endcall %}
+  <div id="reputation-tile" class="stat-tile" style="display:none" aria-live="polite">
+    <span class="stat-tile-label">Google reviews</span>
+    <span class="stat-tile-value" id="rep-count"></span>
+    <span class="stat-tile-sub" id="rep-trend"></span>
+  </div>
+  <p class="roi-foot">Revenue is an <strong>estimate</strong> based on the average job value you set in
+    <a href="/settings">Settings</a> -- not collected money.</p>
+</div>
+<script>
+(function () {
+  fetch('/api/reputation')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (!data || data.review_count === null || data.review_count === undefined) return;
+      var tile = document.getElementById('reputation-tile');
+      var countEl = document.getElementById('rep-count');
+      var trendEl = document.getElementById('rep-trend');
+      countEl.textContent = data.review_count + ' reviews';
+      if (data.baseline_count !== null && data.baseline_count !== undefined
+          && data.baseline_count !== data.review_count) {
+        trendEl.textContent = 'up from ' + data.baseline_count + ' when you started';
+      } else if (data.baseline_count !== null && data.baseline_count !== undefined) {
+        trendEl.textContent = 'same as when you started';
+      }
+      tile.style.display = '';
+    })
+    .catch(function () {});
+}());
+</script>
+<script>
+(function () {
+  var headline = document.getElementById('roi-headline');
+  var valEl    = document.getElementById('roi-headline-value');
+  var subEl    = document.getElementById('roi-headline-sub');
+  var noteEl   = document.getElementById('roi-headline-note');
+  var lossNote = document.getElementById('roi-loss-note');
+  function fmt(n) {
+    return n.toLocaleString('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0});
+  }
+  function renderHeadline(data) {
+    var multiple = data && data.roi_multiple;
+    var revenue  = data && data.totals && data.totals.revenue;
+    var src      = data && data.avg_source;
+    var confirmedRev = data && data.confirmed_revenue;
+    var estimatedPipeline = data && data.estimated_pipeline;
+    if (!multiple || !revenue) {
+      headline.style.display = 'none';
+      if (lossNote) lossNote.style.display = 'none';
+      return;
+    }
+    if (confirmedRev && confirmedRev > 0) {
+      var confFmt = fmt(confirmedRev);
+      var estFmt = estimatedPipeline > 0 ? fmt(estimatedPipeline) : null;
+      valEl.textContent = estFmt
+        ? confFmt + ' confirmed + ~' + estFmt + ' estimated recovered'
+        : confFmt + ' confirmed recovered';
+    } else {
+      valEl.textContent = fmt(revenue) + ' estimated recovered';
+    }
+    subEl.textContent = 'paid for itself ~' + multiple + 'x this month';
+    if (src === 'owner') {
+      noteEl.textContent = 'Based on your average job value. Revenue is an estimate -- not collected money.';
+    } else {
+      noteEl.textContent = 'Industry estimate -- set your average job value in Settings for an exact number. Revenue is an estimate -- not collected money.';
+    }
+    headline.style.display = '';
+    if (lossNote) lossNote.style.display = '';
+  }
+  document.addEventListener('roi:data', function (e) { renderHeadline(e.detail); });
+}());
+</script>
 {% endblock %}

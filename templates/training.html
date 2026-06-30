@@ -4,7 +4,7 @@
 {% from "components/ui/badge.html" import pill %}
 {% block title %}Memory{% endblock %}
 {% block page_title %}FirstBack's Memory{% endblock %}
-{% block page_sub %}<p class="page-sub">Every conversation you have with the command center is saved here. FirstBack calls out where it fell short, and you teach it so it gets it right next time.</p>{% endblock %}
+{% block page_sub %}<p class="page-sub">Every conversation you have with the assistant is saved here. FirstBack calls out where it fell short, and you teach it so it gets it right next time.</p>{% endblock %}
 
 {% block content %}
 {% if request.args.get('taught') %}<p class="provider-note provider-note-ok">Got it. FirstBack learned that and will use it from now on.</p>{% endif %}
@@ -85,7 +85,7 @@
       </a>
       {% endfor %}
     {% else %}
-      <p>No conversations yet. Talk to FirstBack on the <a href="/dashboard">Command Center</a> and they'll be saved here.</p>
+      <p>No conversations yet. Talk to FirstBack on the <a href="/dashboard">Assistant</a> and they'll be saved here.</p>
     {% endif %}
   {% endcall %}
 </div>

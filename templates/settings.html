@@ -26,6 +26,13 @@
 {% block header_actions %}{% if saved %}{{ pill('Saved', 'booked', dot=true) }}{% endif %}{% endblock %}
 
 {% block content %}
+{% if golive_complete %}
+<div class="settings-col">
+{% call card(anchor='set-setup', title='Setup', subtitle='Your account is live. Return to the setup wizard to review your number, A2P registration, and go-live status.') %}
+  <a class="btn btn-secondary btn-sm" href="/setup">Open setup wizard &rarr;</a>
+{% endcall %}
+</div>
+{% endif %}
 <form method="post" class="settings-col">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   {% call card(title='Business profile', subtitle='The basics your AI uses to sound like you.') %}

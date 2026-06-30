@@ -197,7 +197,7 @@ check("/setup/profile requires login", r.status_code in (301, 302))
 reset_biz()
 login()
 r = client.get("/setup")
-check("/setup renders for a logged-in owner", r.status_code == 200 and b"Go Live" in r.data)
+check("/setup renders for a logged-in owner", r.status_code == 200 and b"Setup" in r.data)
 check("the wizard shows the profile step as current", b"Business name" in r.data and b"EIN" in r.data)
 check("the wizard is honest that we're not live yet", b"steps done" in r.data)
 
@@ -634,25 +634,28 @@ check("setup page renders the 'fully set up' section", b"Get the most out of" in
 check("setup page shows the recommended meter", b"fs-meter" in r_setup.data and b"set up" in r_setup.data)
 
 
-# ====================== Go-Live nav placement + first-login landing ======================
+# ====================== Setup nav placement + first-login landing ======================
 # Force the non-A2P prerequisites so toggling A2P alone flips is_live on/off deterministically.
 db.set_business_twilio(1, "+12677562454", "PNheritage", webhooks_wired=True)
 db.set_forwarding_confirmed(1, True)
 
-# Not live -> Go Live is pinned to the top (accent-emphasized), no completion check, and login lands there.
+# Not live -> Setup is pinned to the top (accent-emphasized); no completion check; login lands on wizard.
 db.set_a2p_status(1, "pending")
 nav_nl = client.get("/dashboard").data
-check("nav: incomplete -> Go Live pinned to top (emphasized)", b"nav-item-golive" in nav_nl)
+check("nav: incomplete -> Setup pinned to top (emphasized)", b"nav-item-golive" in nav_nl)
 check("nav: incomplete -> no completion check shown", b"nav-check" not in nav_nl)
-check("landing: incomplete -> login lands on the Go Live wizard",
+check("landing: incomplete -> login lands on the Setup wizard",
       login().headers.get("Location", "").endswith("/setup"))
 
-# Live -> Go Live retires to the bottom with a check, and login lands on the command center.
+# Live -> Setup is removed from the sidebar entirely; surfaces as a card inside Settings.
 db.set_a2p_status(1, "approved")
 nav_live = client.get("/dashboard").data
-check("nav: complete -> completion check shown", b"nav-check" in nav_live)
-check("nav: complete -> no longer top-emphasized", b"nav-item-golive" not in nav_live)
-check("landing: complete -> login lands on the command center",
+check("nav: complete -> Setup item absent from sidebar",
+      b"nav-item-golive" not in nav_live)
+check("nav: complete -> no completion check (retirement block removed)", b"nav-check" not in nav_live)
+check("settings: complete -> Setup card present in Settings page",
+      b"set-setup" in client.get("/settings").data)
+check("landing: complete -> login lands on the assistant",
       login().headers.get("Location", "").endswith("/dashboard"))
 
 

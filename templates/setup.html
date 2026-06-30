@@ -3,9 +3,9 @@
 {% from "components/ui/input.html" import field %}
 {% from "components/ui/badge.html" import pill %}
 
-{% block title %}Go Live{% endblock %}
+{% block title %}Setup{% endblock %}
 {% block head_extra %}<link rel="stylesheet" href="/static/setup.css?v=3">{% endblock %}
-{% block page_title %}Go Live{% endblock %}
+{% block page_title %}Setup{% endblock %}
 {% block page_sub %}<p class="page-sub">Set up call forwarding so {{ app_name }} answers your missed calls — starting today. Texting turns on automatically once your number clears carrier verification. No tech setup, we walk you through it.</p>{% endblock %}
 {% block header_actions %}{% if live_verified %}{{ pill('Live', 'booked', dot=true) }}{% elif is_live %}{{ pill('Almost', 'warning', dot=true) }}{% endif %}{% endblock %}
 

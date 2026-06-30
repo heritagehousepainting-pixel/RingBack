@@ -633,6 +633,7 @@ function addErrorTurn(container, message, retryFn) {
       const d = await apiFetch(root.dataset.endpoint + "?range=" + range);
       renderTiles(d);
       renderChart(d.series);
+      document.dispatchEvent(new CustomEvent('roi:data', {detail: d}));
     } catch (err) {
       chartEl.innerHTML = '<p class="roi-empty">Could not load analytics. ' + err.message + "</p>";
     }

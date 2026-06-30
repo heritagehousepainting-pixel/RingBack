@@ -1,5 +1,5 @@
 {% extends "app_shell.html" %}
-{% block title %}Command Center{% endblock %}
+{% block title %}Assistant{% endblock %}
 {% block page_title %}{% endblock %}
 
 {% block content %}
@@ -19,11 +19,11 @@
   {# ---- Conversation: empty hero state, then the transcript ---- #}
   <div class="convo" id="convo">
     <div class="convo-hero" id="hero">
-      <p class="convo-kicker">{{ app_name }} · your command center</p>
+      <p class="convo-kicker">{{ app_name }} · your assistant</p>
       <h1 class="convo-hello">{{ hello }}</h1>
       <p class="convo-sub">Tell me what you want done. I can pull your numbers, show your
         leads and booked estimates, save a contact, connect your calendar, and text a lead
-        back. You can still work by hand in the <a href="/pipeline">Pipeline</a>.</p>
+        back. You can still work by hand in the <a href="/pipeline">Dashboard</a>.</p>
       {# The trust headline the competition can't copy (BRAIN §6). Stated plainly, not loudly. #}
       <ul class="trust-line" aria-label="Our promises to you">
         <li>We don't sell your leads.</li>
@@ -63,9 +63,9 @@
         <p class="briefing-headline briefing-headline--clear">
           All clear
           {% if last_lead_name %}
-          <span class="briefing-last">Last lead: {{ last_lead_name }}{% if last_lead_ago %} &mdash; {{ last_lead_ago }}{% endif %}. <a href="/pipeline">View pipeline</a></span>
+          <span class="briefing-last">Last lead: {{ last_lead_name }}{% if last_lead_ago %} &mdash; {{ last_lead_ago }}{% endif %}. <a href="/pipeline">View dashboard</a></span>
           {% else %}
-          <span class="briefing-last">No missed calls yet. <a href="/simulator">Try the demo</a></span>
+          <span class="briefing-last">No missed calls yet. <a href="/demo">Try the demo</a></span>
           {% endif %}
         </p>
       </div>
@@ -98,11 +98,11 @@
     <form class="command-bar" id="commandBar" autocomplete="off">
       <span class="command-spark" aria-hidden="true"></span>
       <input class="command-input" id="commandInput" name="message" type="text"
-             placeholder="Ask FirstBack to do something..." aria-label="Command FirstBack">
+             placeholder="Ask FirstBack to do something..." aria-label="Ask your assistant">
       {# Push-to-talk: Web Speech API only, no new infra. Hidden until JS confirms support;
          dictates into the bar so the owner can review before it ever sends (no blind send). #}
       <button class="command-mic" id="commandMic" type="button" aria-pressed="false"
-              aria-label="Dictate your command" hidden>
+              aria-label="Dictate your message" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </button>

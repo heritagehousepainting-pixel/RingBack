@@ -24,21 +24,21 @@
       {{ app_name }}
     </a>
     <nav class="sidebar-nav">
-      {# Go Live is pinned to the top (and accent-emphasized) until the tenant is live;
-         once golive_complete it retires to the bottom with a check (see below). #}
+      {# Setup is pinned to the top (and accent-emphasized) until the tenant is live;
+         once golive_complete it is removed from the sidebar entirely (surfaces inside Settings). #}
       {% if not golive_complete %}
       <a class="nav-item nav-item-golive {{ 'active' if path.startswith('/setup') }}" href="/setup">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
-        <span>Go Live</span>
+        <span>Setup</span>
       </a>
       {% endif %}
-      <a class="nav-item {{ 'active' if path.startswith('/dashboard') }}" href="/dashboard">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>
-        <span>Command</span>
-      </a>
       <a class="nav-item {{ 'active' if path.startswith('/pipeline') }}" href="/pipeline">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-        <span>Pipeline</span>
+        <span>Dashboard</span>
+      </a>
+      <a class="nav-item {{ 'active' if path.startswith('/dashboard') }}" href="/dashboard">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>
+        <span>Assistant</span>
       </a>
       <a class="nav-item {{ 'active' if path.startswith('/training') }}" href="/training">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-4 12.7V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.3A7 7 0 0 0 12 2z"/><path d="M9 22h6"/></svg>
@@ -52,25 +52,10 @@
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         <span>Customers</span>
       </a>
-      <a class="nav-item {{ 'active' if path.startswith('/analytics') }}" href="/analytics">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        <span>ROI</span>
-      </a>
-      <a class="nav-item {{ 'active' if path.startswith('/simulator') }}" href="/simulator">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
-        <span>Demo</span>
-      </a>
       <a class="nav-item {{ 'active' if path.startswith('/settings') }}" href="/settings">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
         <span>Settings</span>
       </a>
-      {% if golive_complete %}
-      <a class="nav-item is-complete {{ 'active' if path.startswith('/setup') }}" href="/setup">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
-        <span>Go Live</span>
-        <svg class="nav-check" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-      </a>
-      {% endif %}
     </nav>
     <div class="sidebar-foot">
       <span class="avatar">{{ (business.name or 'R')[0]|upper }}</span>
