@@ -88,7 +88,7 @@
 
     <h1 class="ob-title">Every missed call,<br><span class="hot">answered and booked.</span></h1>
 
-    <p class="ob-sub" id="ob-sub">When you can’t get to the phone, {{ app_name }}’s AI does — answers the call,
+    <p class="ob-sub" id="ob-sub">When you can’t get to the phone, {{ app_name }}’s AI does — {% if voice_configured %}answers the call{% else %}texts the caller back{% endif %},
       captures the lead, and books the estimate. So the job doesn’t go to the next contractor.</p>
 
     <form class="ob-search" action="/signup" method="get">
@@ -100,11 +100,11 @@
         </button>
       </div>
       <div class="ob-tabs" role="tablist">
-        <button class="ob-seg" type="button" data-seg="text">
+        <button class="ob-seg{% if not voice_configured %} active{% endif %}" type="button" data-seg="text">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
           Text
         </button>
-        <button class="ob-seg active" type="button" data-seg="call">
+        <button class="ob-seg{% if voice_configured %} active{% endif %}" type="button" data-seg="call">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.27a2 2 0 0 1 2.11-.45c.74.34 1.53.57 2.34.7A2 2 0 0 1 22 16.92z"/></svg>
           Call
         </button>
@@ -126,7 +126,7 @@
     <!-- Proof: ruled frame, registration ticks, phone (voice/text) + booking.json.
          is-call shows the voice transcript by default (hero leads with voice); the
          Text/Call toggle above flips it. -->
-    <div class="ob-proof is-call" id="ob-proof">
+    <div class="ob-proof {% if voice_configured %}is-call{% else %}is-text{% endif %}" id="ob-proof">
       <span class="ob-proof-label">live · missed call → booked</span>
       <span class="ob-tick tl" aria-hidden="true"></span><span class="ob-tick tr" aria-hidden="true"></span>
       <span class="ob-tick bl" aria-hidden="true"></span><span class="ob-tick br" aria-hidden="true"></span>
