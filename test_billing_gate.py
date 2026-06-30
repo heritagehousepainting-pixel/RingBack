@@ -57,5 +57,20 @@ check("setup -> reason mentions forwarding",
 check("voice_live + no call -> reason mentions first call",
       "first call" in billing.checkout_gate_reason(biz("voice_live", 0)).lower())
 
+print("\n=== TEST-ONLY override opens the gate, but only on test keys ===")
+# Simulate the override flag being on (it's read from env at import).
+billing._GATE_OPEN_OVERRIDE = True
+billing.STRIPE_SECRET_KEY = "sk_test_fake"
+check("override + test key -> gate forced open even in setup",
+      billing.checkout_gate_ok(biz("setup", 0)))
+billing.STRIPE_SECRET_KEY = "sk_live_real"
+check("override + LIVE key -> gate still enforced (no ungated real charge)",
+      not billing.checkout_gate_ok(biz("setup", 0)))
+check("override + LIVE key -> still allowed once genuinely eligible",
+      billing.checkout_gate_ok(biz("voice_live", 1)))
+# Restore defaults so nothing leaks.
+billing._GATE_OPEN_OVERRIDE = False
+billing.STRIPE_SECRET_KEY = "sk_test_fake"
+
 print(f"\n{_pass} passed, {_fail} failed")
 sys.exit(1 if _fail else 0)

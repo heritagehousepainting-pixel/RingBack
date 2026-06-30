@@ -26,6 +26,13 @@ from config import VOICE_PUBLIC_URL, PUBLIC_BASE_URL, SEED_OWNER_EMAIL
 STRIPE_SECRET_KEY     = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
+# TEST-ONLY gate override: when FIRSTBACK_BILLING_GATE_OPEN is truthy AND Stripe is in
+# test mode (sk_test_ keys), the PS-3 checkout gate is held OPEN so the operator can
+# click through Checkout before any contractor is live. It is IGNORED on live keys, so
+# it can never enable an ungated real charge. Default off (gate fully enforced).
+_GATE_OPEN_OVERRIDE = os.environ.get("FIRSTBACK_BILLING_GATE_OPEN", "").strip().lower() \
+    in ("1", "true", "yes", "on")
+
 # Stripe Price IDs keyed by (plan, interval). Annual is billed once a year at 20% off
 # the monthly rate (i.e. monthly × 12 × 0.8). The monthly conversation allotment is the
 # SAME on annual — the fuel gauge still refills every calendar month (see db.conversations_remaining).
@@ -64,8 +71,17 @@ def configured() -> bool:
 # charged $99, disputes it, churns, and warns their contractor network (decisions.md
 # PS-3 — a Bucket-1 red line). The pricing UI hides the Subscribe button until this
 # passes; billing_checkout enforces it server-side so a hand-crafted POST can't bypass it.
+def _stripe_test_mode() -> bool:
+    """True when the configured secret key is a Stripe TEST key (sk_test_...)."""
+    return STRIPE_SECRET_KEY.startswith("sk_test_")
+
+
 def checkout_gate_ok(biz) -> bool:
     """True when this business is allowed to start a paid subscription (PS-3)."""
+    # Test-only escape hatch: open the gate for operator testing, but ONLY on test
+    # keys — never on live keys, so a real card can never be charged ungated.
+    if _GATE_OPEN_OVERRIDE and _stripe_test_mode():
+        return True
     if not biz:
         return False
     state = biz.get("activation_state") or "setup"
