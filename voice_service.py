@@ -43,8 +43,8 @@ from enum import Enum
 import httpx
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 
-from config import (VOICE_PUBLIC_URL, CONVERSATIONRELAY_VOICE, VOICE_SERVICE_PORT,
-                    WEB_INTERNAL_URL, INTERNAL_SECRET)
+from config import (VOICE_PUBLIC_URL, CONVERSATIONRELAY_VOICE, VOICE_TTS_PROVIDER,
+                    VOICE_SERVICE_PORT, WEB_INTERNAL_URL, INTERNAL_SECRET)
 
 # This service does NOT import the Flask app or the DB at module load. In production
 # (WEB_INTERNAL_URL set) it relays each turn to the web app's /internal/voice/turn
@@ -242,10 +242,16 @@ def build_twiml(biz_id, lead_id, wss_base=None, name=None, greeting=None):
     base = (wss_base or _wss_base() or "").rstrip("/")
     ws_url = f"{base}/ws?biz={biz_id}&lead={lead_id}"
     voice_attr = f' voice="{_xesc(CONVERSATIONRELAY_VOICE)}"' if CONVERSATIONRELAY_VOICE else ""
+    # Pin the TTS engine explicitly (default ElevenLabs) so the call uses a natural
+    # voice instead of Twilio's generic fallback. For ElevenLabs we also turn on text
+    # normalization so phone numbers / addresses / dollar amounts are spoken cleanly.
+    provider = (VOICE_TTS_PROVIDER or "").strip()
+    provider_attr = f' ttsProvider="{_xesc(provider)}"' if provider else ""
+    norm_attr = ' elevenlabsTextNormalization="on"' if provider.lower() == "elevenlabs" else ""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Response><Connect>'
-        f'<ConversationRelay url="{_xesc(ws_url)}"{voice_attr} '
+        f'<ConversationRelay url="{_xesc(ws_url)}"{provider_attr}{voice_attr}{norm_attr} '
         f'welcomeGreeting="{_xesc(greeting)}">'
         f'<Parameter name="biz" value="{_xesc(biz_id)}"/>'
         f'<Parameter name="lead" value="{_xesc(lead_id)}"/>'

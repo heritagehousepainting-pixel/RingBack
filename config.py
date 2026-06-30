@@ -287,6 +287,14 @@ try:
 except ValueError:
     VOICE_SERVICE_PORT = 8810
 CONVERSATIONRELAY_VOICE = os.environ.get("FIRSTBACK_VOICE_TTS", "")
+# FIRSTBACK_TTS_PROVIDER picks the ConversationRelay TTS engine ("ElevenLabs",
+# "Google", "Amazon"). Defaults to ElevenLabs (Twilio's own 2026 default) so calls
+# use a natural voice rather than the generic fallback that sounds robotic. Making
+# it explicit guards against Twilio changing its default. Set to "" to omit the
+# attribute and let Twilio choose. When the provider is ElevenLabs we also enable
+# text normalization so phone numbers, addresses, and dollar amounts are spoken
+# correctly on a scheduling call.
+VOICE_TTS_PROVIDER = os.environ.get("FIRSTBACK_TTS_PROVIDER", "ElevenLabs")
 
 # Voice metering constants (Slice 2 / Slice 3 / Slice 4 cost enforcement).
 # VOICE_MONTHLY_CAP_CENTS: maximum voice spend per business per calendar month
