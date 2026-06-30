@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 import db
 import jobber_fsm
 import hcp_fsm
+import servicetitan_fsm
 from config import FSM_SYNC_INTERVAL_HOURS
 
 
@@ -31,17 +32,17 @@ from config import FSM_SYNC_INTERVAL_HOURS
 # ------------------------------------------------------------------
 def configured() -> bool:
     """True if ANY FSM provider has credentials set."""
-    return jobber_fsm.configured() or hcp_fsm.configured()
+    return jobber_fsm.configured() or hcp_fsm.configured() or servicetitan_fsm.configured()
 
 
 def push_configured() -> bool:
     """True if the push (quote-request) path is configured.
 
-    In v1 this is the same gate as configured(). Jobber supports real push;
-    HCP push is a v1 no-op but the credential gate still returns True so the
-    booking path is attempted (the no-op is transparent to callers).
+    In v1 this is the same gate as configured(). Jobber + ServiceTitan support real push;
+    HCP push is a v1 no-op but the credential gate still returns True so the booking path is
+    attempted (the no-op is transparent to callers).
     """
-    return jobber_fsm.configured() or hcp_fsm.configured()
+    return jobber_fsm.configured() or hcp_fsm.configured() or servicetitan_fsm.configured()
 
 
 # ------------------------------------------------------------------
@@ -50,10 +51,13 @@ def push_configured() -> bool:
 def _get_active_provider(business_id: int):
     """Return the single active FSMProvider for this business, or None.
 
-    HCP > Jobber tiebreak: if both are connected, HCP wins and a warning is
-    logged. This is safe for single-tenant dogfood (no double-fire); a per-
-    business fsm_provider column is the v2 path for multi-tenant multi-provider.
+    Priority ServiceTitan > HCP > Jobber when more than one is connected (a contractor uses one
+    CRM; this is just a deterministic tiebreak, safe for single-tenant — no double-fire). A
+    per-business fsm_provider column is the v2 path for multi-tenant multi-provider.
     """
+    if servicetitan_fsm.configured() and servicetitan_fsm.is_connected(business_id):
+        return servicetitan_fsm._provider
+
     hcp_ok = hcp_fsm.configured() and hcp_fsm.is_connected(business_id)
     job_ok = jobber_fsm.configured() and jobber_fsm.is_connected(business_id)
 
@@ -102,6 +106,7 @@ def sync_clients(business_id: int) -> dict:
     _provider_labels = {
         "jobber": "Jobber",
         "housecall_pro": "Housecall Pro",
+        "servicetitan": "ServiceTitan",
     }
     provider_label = _provider_labels.get(provider_key, provider_key)
 

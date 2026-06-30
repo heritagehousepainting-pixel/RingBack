@@ -186,6 +186,18 @@ HCP_CLIENT_SECRET = os.environ.get("HCP_CLIENT_SECRET", "")
 HCP_REDIRECT_URI = os.environ.get(
     "HCP_REDIRECT_URI", "http://127.0.0.1:8800/api/fsm/hcp/callback")
 
+# --- ServiceTitan FSM sync (optional; gated — all entry points are safe no-ops when unset) ---
+# Unlike Jobber/HCP, ServiceTitan uses OAuth2 CLIENT-CREDENTIALS (no per-user redirect): register
+# ONE app in the ServiceTitan Developer Portal for these three app-level values, then each
+# contractor enters their TENANT ID in the connect form (installing your app on their account
+# grants it access to that tenant). Token endpoint is auth.servicetitan.io/connect/token; every
+# request also carries the ST-App-Key header and is tenant-scoped. Gated on all three being set.
+SERVICETITAN_CLIENT_ID = os.environ.get("SERVICETITAN_CLIENT_ID", "")
+SERVICETITAN_CLIENT_SECRET = os.environ.get("SERVICETITAN_CLIENT_SECRET", "")
+SERVICETITAN_APP_KEY = os.environ.get("SERVICETITAN_APP_KEY", "")
+# "production" (default) or "integration" (ServiceTitan's sandbox environment).
+SERVICETITAN_ENV = os.environ.get("SERVICETITAN_ENV", "production")
+
 # --- Google Calendar (optional real two-way sync) -------------------------
 # To turn on: in Google Cloud Console create an OAuth 2.0 Client ID of type
 # "Web application", add the redirect URI below to its "Authorized redirect

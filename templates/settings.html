@@ -193,6 +193,50 @@
       <p class="provider-note provider-note-soft">Housecall Pro sync coming soon &mdash; contact us to enable.</p>
     {% endif %}
   {% endcall %}
+
+
+  {% call card(anchor='set-servicetitan', title='Connect ServiceTitan', subtitle='Sync your existing ServiceTitan customers so the AI recognizes returning clients and never treats them as cold leads.') %}
+    {% if stconnected %}<p class="provider-note provider-note-ok">ServiceTitan connected. Syncing your existing customers&hellip; <a href="/callers">Review suggestions</a></p>{% endif %}
+    {% if sterror %}<p class="provider-note provider-note-err">{% if sterror == 'unconfigured' %}Set SERVICETITAN_CLIENT_ID, SERVICETITAN_CLIENT_SECRET and SERVICETITAN_APP_KEY to enable.{% elif sterror == 'tenant' %}Enter your numeric ServiceTitan tenant ID.{% else %}We couldn't finish connecting ServiceTitan. Check your tenant ID and try again.{% endif %}</p>{% endif %}
+    {% if st_configured %}
+      <div class="provider-grid">
+        <div class="provider-card{{ ' is-connected' if st_connected else '' }}" data-provider="servicetitan">
+          <span class="provider-logo" style="font-size:1.2rem;font-weight:700;color:var(--accent)">S</span>
+          <span class="provider-meta">
+            <span class="provider-name">ServiceTitan</span>
+            <span class="provider-status">
+              {% if st_connected %}
+                Connected{% if fsm_clients_synced and st_connected %} &mdash; {{ fsm_clients_synced }} client{{ 's' if fsm_clients_synced != 1 else '' }} synced{% endif %}
+              {% else %}
+                Not connected
+              {% endif %}
+            </span>
+          </span>
+          {% if st_connected %}
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="st-sync-btn">Sync now</button>
+            <button type="button" class="btn btn-secondary btn-sm provider-btn" id="st-disconnect-btn" style="margin-left:0.5rem">Disconnect</button>
+          {% endif %}
+        </div>
+      </div>
+      {% if not st_connected %}
+        <form method="post" action="/api/fsm/servicetitan/connect" class="provider-form" style="margin-top:var(--space-3);display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:center">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <input type="text" name="tenant_id" inputmode="numeric" pattern="[0-9]+" placeholder="Your ServiceTitan tenant ID" required
+                 style="flex:1 1 220px;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius)">
+          <button type="submit" class="btn btn-primary btn-sm">Connect</button>
+        </form>
+        <p style="margin-top:var(--space-2);font-size:0.82rem;color:var(--text-muted)">Find your tenant ID in ServiceTitan under Settings &rarr; Integrations &rarr; API Application Access (after installing the FirstBack app).</p>
+      {% else %}
+        <p style="margin-top:var(--space-3);font-size:0.88rem;color:var(--text-muted)">
+          Synced customers appear as suggestions for you to confirm.
+          <a href="/api/suggestions/bulk">Bulk accept</a> to recognize them all at once.
+          {% if fsm_last_synced_at %} Last synced: {{ fsm_last_synced_at[:10] }}.{% endif %}
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="provider-note provider-note-soft">ServiceTitan sync coming soon &mdash; contact us to enable.</p>
+    {% endif %}
+  {% endcall %}
   <script>
   (function(){
     var csrf = function(){ return (document.querySelector('[name=_csrf]')||{}).value || ''; };
@@ -232,6 +276,26 @@
       hcpDiscBtn.addEventListener('click', function(){
         if (!confirm('Disconnect Housecall Pro? Your synced contact suggestions will remain.')) return;
         fetch('/api/fsm/hcp/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(){ location.reload(); });
+      });
+    }
+    var stSyncBtn = document.getElementById('st-sync-btn');
+    if (stSyncBtn) {
+      stSyncBtn.addEventListener('click', function(){
+        stSyncBtn.disabled = true;
+        stSyncBtn.textContent = 'Syncing…';
+        fetch('/api/fsm/sync', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
+          .then(function(r){return r.json();})
+          .then(function(d){ stSyncBtn.textContent = d.ok ? 'Synced' : (d.error || 'Error'); })
+          .catch(function(){ stSyncBtn.textContent = 'Error'; });
+      });
+    }
+    var stDiscBtn = document.getElementById('st-disconnect-btn');
+    if (stDiscBtn) {
+      stDiscBtn.addEventListener('click', function(){
+        if (!confirm('Disconnect ServiceTitan? Your synced contact suggestions will remain.')) return;
+        fetch('/api/fsm/servicetitan/disconnect', {method:'POST', headers:{'X-CSRF-Token': csrf()}})
           .then(function(r){return r.json();})
           .then(function(){ location.reload(); });
       });

@@ -42,6 +42,7 @@ import google_mail
 import growth
 import jobber_fsm
 import hcp_fsm
+import servicetitan_fsm
 import fsm_sync
 from config import (APP_NAME, TAGLINE, DEBUG, SECRET_KEY, TASKS_SECRET,
                     SESSION_COOKIE_SECURE, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD,
@@ -1360,7 +1361,11 @@ def settings():
                            hcp_configured=hcp_fsm.configured(),
                            hcp_connected=hcp_fsm.is_connected(biz["id"]),
                            hcpconnected=request.args.get("hcpconnected"),
-                           hcperror=request.args.get("hcperror"))
+                           hcperror=request.args.get("hcperror"),
+                           st_configured=servicetitan_fsm.configured(),
+                           st_connected=servicetitan_fsm.is_connected(biz["id"]),
+                           stconnected=request.args.get("stconnected"),
+                           sterror=request.args.get("sterror"))
 
 
 @app.route("/settings/password", methods=["POST"])
@@ -2879,6 +2884,38 @@ def fsm_hcp_disconnect():
     if not _csrf_ok():
         return jsonify({"error": "bad_csrf"}), 403
     hcp_fsm.disconnect(current_business()["id"])
+    return jsonify(connected=False)
+
+
+@app.route("/api/fsm/servicetitan/connect", methods=["POST"])
+@login_required
+def fsm_servicetitan_connect():
+    """Connect ServiceTitan. Unlike Jobber/HCP there's no OAuth redirect — the owner submits
+    their tenant id; we store it and validate the app credentials by minting a token."""
+    if not _csrf_ok():
+        abort(403)
+    if not servicetitan_fsm.configured():
+        return redirect("/settings?sterror=unconfigured")
+    tenant_id = (request.form.get("tenant_id") or "").strip()
+    try:
+        servicetitan_fsm.connect_tenant(current_business()["id"], tenant_id)
+    except ValueError:
+        return redirect("/settings?sterror=tenant")
+    except Exception as e:
+        print(f"[firstback] servicetitan connect failed: {e}", file=sys.stderr, flush=True)
+        return redirect("/settings?sterror=exchange")
+    # Kick off an immediate background sync now that we're connected.
+    threading.Thread(target=_fsm_background_sync, args=(current_business()["id"],), daemon=True).start()
+    return redirect("/settings?stconnected=1")
+
+
+@app.route("/api/fsm/servicetitan/disconnect", methods=["POST"])
+@login_required
+def fsm_servicetitan_disconnect():
+    """Disconnect ServiceTitan for this business. Keeps already-synced contact suggestions."""
+    if not _csrf_ok():
+        return jsonify({"error": "bad_csrf"}), 403
+    servicetitan_fsm.disconnect(current_business()["id"])
     return jsonify(connected=False)
 
 
