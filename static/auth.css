@@ -65,3 +65,13 @@
   .au-form-col{min-height:100vh;padding:clamp(22px,6vw,40px)}
   .au-form{width:100%;max-width:420px;margin:0 auto}   /* fills the padded width, capped — no overflow */
 }
+
+/* OA-2: trade pills on signup. Radios styled as selectable chips. */
+.au-field{display:flex;flex-direction:column;gap:6px}
+.au-trades{display:flex;flex-wrap:wrap;gap:8px}
+.au-trade{position:relative}
+.au-trade input{position:absolute;opacity:0;width:0;height:0}
+.au-trade span{display:inline-block;padding:7px 13px;border:1px solid var(--border);border-radius:var(--radius-pill,999px);
+  font-size:var(--text-sm);color:var(--ink);cursor:pointer;user-select:none;line-height:1.1;background:var(--surface)}
+.au-trade input:checked + span{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.au-trade input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}

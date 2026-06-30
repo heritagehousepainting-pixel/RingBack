@@ -46,6 +46,7 @@ import servicetitan_fsm
 import workiz_fsm
 import fieldedge_fsm
 import fsm_sync
+import ops
 from config import (APP_NAME, TAGLINE, DEBUG, SECRET_KEY, TASKS_SECRET,
                     SESSION_COOKIE_SECURE, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD,
                     app_tz, VOICE_PUBLIC_URL, INTERNAL_SECRET,
@@ -3771,12 +3772,17 @@ def tasks_run_due():
         out["a2p_synced"] = connections.a2p_sync_all()
     except Exception as e:
         print(f"[firstback] a2p_sync_all failed: {e}", file=sys.stderr, flush=True)
-    # Gmail email auto-answer: Vic replies to any new inbound email leads for connected
+    # Gmail email auto-answer: FirstBack's AI replies to any new inbound email leads for connected
     # tenants. No-op until a contractor links Gmail. Defensive: never breaks the tick.
     try:
         out["email_answered"] = google_mail.poll_and_answer_all()
     except Exception as e:
         print(f"[firstback] gmail poll_and_answer_all failed: {e}", file=sys.stderr, flush=True)
+    # TO-1: daily ops brief to the owner (once/day, gated on FIRSTBACK_OPS_SMS). Never breaks the tick.
+    try:
+        out["ops_brief_sent"] = ops.daily_ops_brief()
+    except Exception as e:
+        print(f"[firstback] ops brief failed: {e}", file=sys.stderr, flush=True)
     return jsonify(out)
 
 
@@ -3972,6 +3978,24 @@ def internal_voice_turn_log():
             safe_out = _phone_re.sub("[number]", ai_text)
             db.add_message(lead["id"], "system", f"[VOICE] ai: {safe_out}")
             written += 1
+    # OA-9: first-call nudge. The night of the contractor's FIRST AI-answered call, text them a
+    # link to review it + a quick check-in, so a tone/expectation mismatch surfaces before they
+    # silently turn forwarding off. One-time (first_call_nudge_sent guard), owner-to-owner
+    # (gate=False -> platform alert number, no A2P). Never breaks the transcript write.
+    try:
+        if written and not biz.get("first_call_nudge_sent"):
+            owner_cell = (biz.get("alert_sms") or biz.get("phone") or "").strip()
+            if owner_cell:
+                base = _public_base()
+                link = (base.rstrip("/") + "/pipeline") if base else "your FirstBack dashboard"
+                caller = lead.get("name") or "A caller"
+                body = (f"FirstBack: {caller} just called and I answered. Here's how it went: {link}. "
+                        "How did it sound? Reply 2 if anything needs tweaking and we'll fix it.")
+                messaging.send_sms(biz, owner_cell, body, gate=False)
+                db.mark_first_call_nudge_sent(biz_id)
+    except Exception as _nudge_e:
+        print(f"[firstback] first-call nudge failed (biz {biz_id}): {_nudge_e}",
+              file=sys.stderr, flush=True)
     return jsonify(ok=True, written=written)
 
 

@@ -81,7 +81,14 @@
             {{ field('Owner name', name='owner_name', value=business.owner_name or '') }}
             {{ field('Service area', name='service_area', value=business.service_area or '') }}
             {{ field('Legal business name', name='legal_business_name', value=business.legal_business_name or business.name or '', help='The exact legal name on your tax paperwork. The phone carriers verify it.') }}
-            {{ field('EIN (business tax ID)', name='ein', value=business.ein or '', placeholder='12-3456789', help='Sole proprietors can skip this — we register with your name and address. LLC or corporation? Enter your EIN here.') }}
+            {# OA-3: don't re-litigate the EIN decision already made at signup. Sole props get a
+               static line (no field); LLC/corp get the EIN input. #}
+            {% if business.business_type == 'sole_prop' %}
+            <div class="field-static"><span class="field-label">Tax ID</span>
+              <p class="setup-note" style="margin:4px 0 0">Sole proprietor — no tax ID needed. We register with your name and address.</p></div>
+            {% else %}
+            {{ field("Business EIN (your LLC's tax ID)", name='ein', value=business.ein or '', placeholder='12-3456789', help='The carriers verify this against your legal business name.') }}
+            {% endif %}
             {{ field('Business address', name='business_address', value=business.business_address or '', required=true, placeholder='Street, City, State ZIP') }}
             {{ field('Website (optional)', name='website', value=business.website or '', type='url', placeholder='https://yourbusiness.com') }}
           </div>
@@ -225,7 +232,7 @@
       {% elif s.done %}
       <div class="step-summary">
         <span class="s-text">
-          {%- if s.key == 'profile' -%}<strong>{{ business.name }}</strong> — EIN on file
+          {%- if s.key == 'profile' -%}<strong>{{ business.name }}</strong>{% if business.business_type == 'sole_prop' %} — sole proprietor{% elif business.ein %} — EIN on file{% endif %}
           {%- elif s.key == 'number' -%}<strong>{{ business.twilio_number }}</strong>
           {%- elif s.key == 'a2p' -%}Registered &amp; approved by the carriers
           {%- elif s.key == 'forwarding' -%}Missed calls forward to {{ app_name }}

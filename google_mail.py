@@ -296,16 +296,31 @@ def poll_and_answer(business_id):
     answered twice. Returns the count answered. Defensive: one bad email never stops the rest,
     and the whole thing is a no-op when Gmail isn't connected. Wired into /tasks/run-due."""
     import ai
+    import messaging
+    from growth import _TONE_RISK_KEYWORDS
     biz = db.get_business(business_id)
     if not biz or not is_connected(business_id):
         return 0
     answered = 0
     for mail in fetch_unread(business_id):
         try:
+            prompt_body = (mail["subject"] + "\n\n" + mail["body"]).strip()
+            # GA-5: tone-risk gate. Mirror the SMS suppression — if the email reads as upset, do
+            # NOT auto-reply into the booking flow. Skip it and alert the owner to handle it.
+            low = prompt_body.lower()
+            if any(kw in low for kw in _TONE_RISK_KEYWORDS):
+                owner_cell = (biz.get("alert_sms") or biz.get("phone") or "").strip()
+                if owner_cell:
+                    sender = (mail.get("from_name") or mail.get("from_email") or "A customer")
+                    messaging.send_sms(
+                        biz, owner_cell,
+                        f"FirstBack: email from {sender} looks upset — I held off auto-replying. "
+                        "Open your inbox to handle it personally.", gate=False)
+                mark_read(business_id, mail["id"])   # don't re-flag it every poll
+                continue
             # Reuse the exact same brain the SMS/voice paths use: a one-message inbound
             # history. generate_reply is internally defensive (falls back to the demo brain
             # on any provider error), so this never throws on an API hiccup.
-            prompt_body = (mail["subject"] + "\n\n" + mail["body"]).strip()
             history = [{"direction": "in", "body": prompt_body}]
             reply_text, _slot = ai.generate_reply(biz, history)
             if not (reply_text or "").strip():

@@ -82,6 +82,22 @@
 
         <form class="au-fields" method="post" action="{{ '/signup' if is_signup else '/login' }}">
           {% if is_signup %}{{ field('Business name', name='business', value=request.form.get('business',''), placeholder='Heritage House Painting', required=true) }}{% endif %}
+          {% if is_signup %}
+          {# OA-2: capture trade up front so the AI tone, growth plays, and lifecycle emails are
+             personalized from minute one (no silent "home services" default). Required radio so a
+             real signup always carries it; the server keeps a defensive fallback for safety. #}
+          <div class="au-field">
+            <label class="field-label">Your trade</label>
+            <div class="au-trades" role="radiogroup" aria-label="Your trade">
+              {% for t in ['Painting','HVAC','Plumbing','Roofing','Electrical','Landscaping','Other'] %}
+              <label class="au-trade">
+                <input type="radio" name="trade" value="{{ t }}" required{{ ' checked' if request.form.get('trade')==t else '' }}>
+                <span>{{ t }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
           {% if is_signup %}{{ field('Your name', name='owner', value=request.form.get('owner',''), placeholder='Jonathan') }}{% endif %}
           {{ field('Work email', name='email', type='email', value=request.form.get('email',''), placeholder='you@yourcompany.com', required=true, autocomplete='email') }}
           {{ field('Password', name='password', type='password', placeholder='••••••••', required=true, minlength=('8' if is_signup else ''), autocomplete=('new-password' if is_signup else 'current-password')) }}

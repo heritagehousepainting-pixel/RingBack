@@ -567,7 +567,9 @@ def init_db():
     for col, ddl in (("activation_state", "TEXT DEFAULT 'setup'"),
                      ("click_to_send_optin", "INTEGER DEFAULT 0"),
                      ("tcpa_consent_at", "TEXT"),
-                     ("a2p_pending_submit", "INTEGER DEFAULT 0")):
+                     ("a2p_pending_submit", "INTEGER DEFAULT 0"),
+                     # OA-9: one-time guard so the first-AI-call nudge fires exactly once.
+                     ("first_call_nudge_sent", "INTEGER DEFAULT 0")):
         if col not in biz_cols:
             c.execute(f"ALTER TABLE businesses ADD COLUMN {col} {ddl}")
     # messages gain delivery tracking for real (Twilio) SMS.
@@ -1256,6 +1258,14 @@ def mark_a2p_pending_submit(business_id, pending=True):
     conn = get_conn()
     conn.execute("UPDATE businesses SET a2p_pending_submit=? WHERE id=?",
                  (1 if pending else 0, business_id))
+    conn.commit()
+    conn.close()
+
+
+def mark_first_call_nudge_sent(business_id):
+    """OA-9: record that the one-time first-AI-call nudge has gone out (idempotency guard)."""
+    conn = get_conn()
+    conn.execute("UPDATE businesses SET first_call_nudge_sent=1 WHERE id=?", (business_id,))
     conn.commit()
     conn.close()
 

@@ -71,6 +71,20 @@ def detect_urgency(text):
 # --------------------------------------------------------------------------
 # REAL BRAINS  (MiniMax today, Claude for the public launch)
 # --------------------------------------------------------------------------
+def _trade_tone(trade):
+    """A one-line tone instruction tuned to the contractor's trade (GA-1). Emergency-adjacent
+    trades want urgency + reassurance; consultation trades want a planning/estimate tone.
+    Returns "" for an unknown trade so the base prompt is unchanged."""
+    t = (trade or "").lower()
+    if any(k in t for k in ("plumb", "hvac", "heat", "cool", "air", "roof", "electric")):
+        return ("- For this trade, callers often have an urgent problem. Lead with immediate "
+                "availability and a calm, reassuring tone.\n")
+    if any(k in t for k in ("paint", "landscap", "lawn", "remodel", "floor", "fence", "deck")):
+        return ("- For this trade, callers are planning, not in crisis. Lead with the free "
+                "estimate and what they can expect.\n")
+    return ""
+
+
 def _system_prompt(business, slots):
     """Shared system prompt: who the AI is + the rules it follows."""
     if slots:
@@ -90,6 +104,7 @@ def _system_prompt(business, slots):
         f"Service area: {business['service_area']}. Hours: {business['hours']}.\n"
         f"Available estimate slots you may offer (soonest first):\n{slot_lines}\n\n"
         "RULES:\n"
+        f"{_trade_tone(business.get('trade'))}"
         "- Sound like a sharp, friendly person who actually works here, not a chatbot or a "
         "form. Warm, brief, direct. One or two short sentences per text.\n"
         "- Punctuation: standard only. Do NOT use dashes of any kind (no em dashes, no en "
